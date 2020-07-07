@@ -17,7 +17,7 @@ import multiprocessing
 
 if __name__ == "__main__":
 
-    # Creating process and queue
+    # Creating process and queue...
     drone_queue = multiprocessing.Queue()
     drone_process = multiprocessing.Process(
         target=drone.main, args=(drone_queue,))
