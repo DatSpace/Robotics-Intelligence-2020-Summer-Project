@@ -31,13 +31,13 @@ def main(drone_queue):
 
         # Target object for drone navigation
         res, drone_target = sim.simxGetObjectHandle(
-            clientID, 'Quadricopter_target', sim.simx_opmode_oneshot_wait)
+            clientID, 'DroneTarget', sim.simx_opmode_oneshot_wait)
         if res != sim.simx_return_ok:
             print('Could not get handle to quadcopter target object...')
 
         # Bottom drone camera
         res, drone_camera = sim.simxGetObjectHandle(
-            clientID, 'floor_camera#', sim.simx_opmode_oneshot_wait)
+            clientID, 'DroneFloorCamera', sim.simx_opmode_oneshot_wait)
         if res != sim.simx_return_ok:
             print('Could not get handle to drone camera object...')
 
@@ -63,7 +63,7 @@ def main(drone_queue):
                 original_image = cv2.cvtColor(
                     original_image, cv2.COLOR_RGB2BGR)
 
-                cv2.imshow("Floor2", original_image)
+                cv2.imshow("Drone View", original_image)
             elif res == sim.simx_return_novalue_flag:
                 # Camera has not started or is not returning images
                 print("No image yet...")
