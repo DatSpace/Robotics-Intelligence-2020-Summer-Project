@@ -14,6 +14,60 @@ import cv2
 import numpy as np
 
 
+def flyUp(clientID, drone_target, step):
+    res, current_target = sim.simxGetObjectPosition(
+        clientID, drone_target, -1, sim.simx_opmode_oneshot)
+    if res == sim.simx_return_ok:
+        new_target = np.array(current_target) + np.array([0.0, 0.0, step])
+        sim.simxSetObjectPosition(
+            clientID, drone_target, -1, new_target, sim.simx_opmode_oneshot)
+
+
+def flyDown(clientID, drone_target, step):
+    res, current_target = sim.simxGetObjectPosition(
+        clientID, drone_target, -1, sim.simx_opmode_oneshot)
+    if res == sim.simx_return_ok:
+        new_target = np.array(current_target) + np.array([0.0, 0.0, -step])
+        sim.simxSetObjectPosition(
+            clientID, drone_target, -1, new_target, sim.simx_opmode_oneshot)
+
+
+def flyLeft(clientID, drone_target, step):
+    res, current_target = sim.simxGetObjectPosition(
+        clientID, drone_target, -1, sim.simx_opmode_oneshot)
+    if res == sim.simx_return_ok:
+        new_target = np.array(current_target) + np.array([0.0, step, 0.0])
+        sim.simxSetObjectPosition(
+            clientID, drone_target, -1, new_target, sim.simx_opmode_oneshot)
+
+
+def flyRight(clientID, drone_target, step):
+    res, current_target = sim.simxGetObjectPosition(
+        clientID, drone_target, -1, sim.simx_opmode_oneshot)
+    if res == sim.simx_return_ok:
+        new_target = np.array(current_target) + np.array([0.0, -step, 0.0])
+        sim.simxSetObjectPosition(
+            clientID, drone_target, -1, new_target, sim.simx_opmode_oneshot)
+
+
+def flyForward(clientID, drone_target, step):
+    res, current_target = sim.simxGetObjectPosition(
+        clientID, drone_target, -1, sim.simx_opmode_oneshot)
+    if res == sim.simx_return_ok:
+        new_target = np.array(current_target) + np.array([step, 0.0, 0.0])
+        sim.simxSetObjectPosition(
+            clientID, drone_target, -1, new_target, sim.simx_opmode_oneshot)
+
+
+def flyBackward(clientID, drone_target, step):
+    res, current_target = sim.simxGetObjectPosition(
+        clientID, drone_target, -1, sim.simx_opmode_oneshot)
+    if res == sim.simx_return_ok:
+        new_target = np.array(current_target) + np.array([-step, 0.0, 0.0])
+        sim.simxSetObjectPosition(
+            clientID, drone_target, -1, new_target, sim.simx_opmode_oneshot)
+
+
 def main(drone_queue):
 
     # Start Program and just in case, close all opened connections
@@ -48,11 +102,10 @@ def main(drone_queue):
 
         # While connected to the simulator
         while (sim.simxGetConnectionId(clientID) != -1):
-
             # Get the image from the camera
             res, resolution, image = sim.simxGetVisionSensorImage(
                 clientID, drone_camera, 0, sim.simx_opmode_buffer)
-
+            flyForward(clientID, drone_target, 0.1)
             if res == sim.simx_return_ok:
 
                 # Convert from V-REP representation to OpenCV
@@ -64,6 +117,7 @@ def main(drone_queue):
                     original_image, cv2.COLOR_RGB2BGR)
 
                 cv2.imshow("Drone View", original_image)
+
             elif res == sim.simx_return_novalue_flag:
                 # Camera has not started or is not returning images
                 print("No image yet...")
@@ -72,63 +126,7 @@ def main(drone_queue):
                 print("Unexpected error returned...", res)
 
             key = cv2.waitKey(1) & 0xFF
-            if (key == ord('w')):
-                current_target = sim.simxGetObjectPosition(
-                    clientID, drone_target, -1, sim.simx_opmode_oneshot)
-                new_target = np.array(
-                    current_target[1]) + np.array([0.1, 0.0, 0.0])
-                sim.simxSetObjectPosition(
-                    clientID, drone_target, -1, new_target, sim.simx_opmode_oneshot)
-            elif (key == ord('a')):
-                current_target = sim.simxGetObjectPosition(
-                    clientID, drone_target, -1, sim.simx_opmode_oneshot)
-                new_target = np.array(
-                    current_target[1]) + np.array([0.0, 0.1, 0.0])
-                sim.simxSetObjectPosition(
-                    clientID, drone_target, -1, new_target, sim.simx_opmode_oneshot)
-            elif (key == ord('s')):
-                current_target = sim.simxGetObjectPosition(
-                    clientID, drone_target, -1, sim.simx_opmode_oneshot)
-                new_target = np.array(
-                    current_target[1]) + np.array([-0.1, 0.0, 0.0])
-                sim.simxSetObjectPosition(
-                    clientID, drone_target, -1, new_target, sim.simx_opmode_oneshot)
-            elif (key == ord('d')):
-                current_target = sim.simxGetObjectPosition(
-                    clientID, drone_target, -1, sim.simx_opmode_oneshot)
-                new_target = np.array(
-                    current_target[1]) + np.array([0.0, -0.1, 0.0])
-                sim.simxSetObjectPosition(
-                    clientID, drone_target, -1, new_target, sim.simx_opmode_oneshot)
-            elif (key == ord('q')):
-                current_target = sim.simxGetObjectPosition(
-                    clientID, drone_target, -1, sim.simx_opmode_oneshot)
-                new_target = np.array(
-                    current_target[1]) + np.array([0.1, 0.0, 0.0])
-                sim.simxSetObjectPosition(
-                    clientID, drone_target, -1, new_target, sim.simx_opmode_oneshot)
-            elif (key == ord('e')):
-                current_target = sim.simxGetObjectPosition(
-                    clientID, drone_target, -1, sim.simx_opmode_oneshot)
-                new_target = np.array(
-                    current_target[1]) + np.array([0.1, 0.0, 0.0])
-                sim.simxSetObjectPosition(
-                    clientID, drone_target, -1, new_target, sim.simx_opmode_oneshot)
-            elif (key == ord('z')):
-                current_target = sim.simxGetObjectPosition(
-                    clientID, drone_target, -1, sim.simx_opmode_oneshot)
-                new_target = np.array(
-                    current_target[1]) + np.array([0.0, 0.0, 0.1])
-                sim.simxSetObjectPosition(
-                    clientID, drone_target, -1, new_target, sim.simx_opmode_oneshot)
-            elif (key == ord('x')):
-                current_target = sim.simxGetObjectPosition(
-                    clientID, drone_target, -1, sim.simx_opmode_oneshot)
-                new_target = np.array(
-                    current_target[1]) + np.array([0.0, 0.0, -0.1])
-                sim.simxSetObjectPosition(
-                    clientID, drone_target, -1, new_target, sim.simx_opmode_oneshot)
-            elif (key == ord('c')):
+            if (key == ord('q')):
                 break
 
         # Before closing the connection to CoppeliaSim, make sure that the last command sent out had time to arrive. You can guarantee this with (for example):
