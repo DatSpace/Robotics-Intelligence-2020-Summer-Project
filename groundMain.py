@@ -11,9 +11,13 @@
 
 import sim
 import cv2
+import time
 import numpy as np
 import droneMain as drone
 import multiprocessing
+
+# Program Constants
+SIMULATION_STEP = 50.0  # in milliseconds
 
 if __name__ == "__main__":
 
@@ -49,10 +53,13 @@ if __name__ == "__main__":
 
         # While connected to the simulator
         while (sim.simxGetConnectionId(clientID) != -1):
+            start_ms = int(round(time.time() * 1000))
 
-            key = cv2.waitKey(1) & 0xFF
-            if (key == ord('q')):
-                break
+            end_ms = int(round(time.time() * 1000))
+            dt_ms = end_ms - start_ms
+            sleep_time = SIMULATION_STEP-dt_ms
+            if (sleep_time > 0.0):
+                time.sleep(sleep_time/1000.0)
 
         # Before closing the connection to CoppeliaSim, make sure that the last command sent out had time to arrive. You can guarantee this with (for example):
         sim.simxGetPingTime(clientID)
