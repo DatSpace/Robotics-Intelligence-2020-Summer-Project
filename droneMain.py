@@ -20,6 +20,15 @@ SCR_HEIGHT = 512
 SIMULATION_STEP = 50.0  # in milliseconds
 
 
+def correctOrientation(drone_target_position, drone, margin):
+    drone_position = sim.simxGetObjectPosition(
+        clientID, drone, -1, sim.simx_opmode_oneshot)[1]
+
+
+def correctTargetError(drone_target_position, drone, margin):
+    pass
+
+
 def getFilteredMap(image):
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
@@ -137,6 +146,12 @@ def main(drone_queue):
         if res != sim.simx_return_ok:
             print('Could not get handle to quadcopter target object...')
 
+        # Drone object
+        res, drone = sim.simxGetObjectHandle(
+            clientID, 'Drone', sim.simx_opmode_oneshot_wait)
+        if res != sim.simx_return_ok:
+            print('Could not get handle to drone object...')
+
         # Bottom drone camera
         res, drone_camera = sim.simxGetObjectHandle(
             clientID, 'DroneFloorCamera', sim.simx_opmode_oneshot_wait)
@@ -156,6 +171,9 @@ def main(drone_queue):
 
             # Elevate drone and start scanning movement
             if (drone_target_res is sim.simx_return_ok):
+                correctOrientation(drone_target_position, drone, 0.1)
+                correctTargetError(drone_target_position, drone, 0.1)
+
                 if (not np.allclose(drone_target_position, [0.0, 0.0, 9.0])):
                     drone_target_position = moveToCentre(
                         clientID, drone_target, drone_target_position)
