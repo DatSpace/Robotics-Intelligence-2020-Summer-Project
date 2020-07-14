@@ -214,3 +214,6 @@ def main(drone_queue):
     else:
         print('Failed connecting to remote API server...')
     print('Simulation has ended...')
+
+
+main(None)
