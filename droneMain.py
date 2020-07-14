@@ -19,14 +19,28 @@ SCR_WIDTH = 512
 SCR_HEIGHT = 512
 SIMULATION_STEP = 50.0  # in milliseconds
 
+# To be determined
 
-def correctOrientation(drone_target_position, drone, margin):
+
+def correctOrientation(clientID, drone_target_position, drone, margin):
     drone_position = sim.simxGetObjectPosition(
         clientID, drone, -1, sim.simx_opmode_oneshot)[1]
 
+# To be determined
 
-def correctTargetError(drone_target_position, drone, margin):
+
+def correctTargetError(clientID, drone_target_position, drone, margin):
     pass
+
+# Converts the pixel coordinates from the map to world coordinates for the robots
+
+
+def cameraToWorldCord2D(current_pos, camera_min, camera_max, world_min, world_max):
+    mapX = (current_pos[0] - camera_min[0]) * (world_max[0] -
+                                               world_min[0]) / (camera_max[0] - camera_min[0]) + world_min[0]
+    mapY = (current_pos[1] - camera_min[1]) * (world_max[1] -
+                                               world_min[1]) / (camera_max[1] - camera_min[1]) + world_min[1]
+    return np.array([mapX, mapY, current_pos[2]])
 
 
 def getFilteredMap(image):
@@ -165,14 +179,18 @@ def main(drone_queue):
 
         drone_target_res = sim.simx_return_novalue_flag
 
+        # Testing print statment
+        print(cameraToWorldCord2D([128.0, 346.0, 8.0], [0.0, 0.0], [
+              512.0, 512.0], [-10.0, -10.0], [10.0, 10.0]))
+
         # While connected to the simulator
         while (sim.simxGetConnectionId(clientID) != -1):
             start_ms = int(round(time.time() * 1000))
 
             # Elevate drone and start scanning movement
             if (drone_target_res is sim.simx_return_ok):
-                correctOrientation(drone_target_position, drone, 0.1)
-                correctTargetError(drone_target_position, drone, 0.1)
+                correctOrientation(clientID, drone_target_position, drone, 0.1)
+                correctTargetError(clientID, drone_target_position, drone, 0.1)
 
                 if (not np.allclose(drone_target_position, [0.0, 0.0, 9.0])):
                     drone_target_position = moveToCentre(
