@@ -55,6 +55,8 @@ if __name__ == "__main__":
         while (sim.simxGetConnectionId(clientID) != -1):
             start_ms = int(round(time.time() * 1000))
 
+            # YOUR CODE HERE
+
             end_ms = int(round(time.time() * 1000))
             dt_ms = end_ms - start_ms
             sleep_time = SIMULATION_STEP-dt_ms
