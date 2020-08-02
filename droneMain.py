@@ -19,18 +19,51 @@ SCR_WIDTH = 512
 SCR_HEIGHT = 512
 SIMULATION_STEP = 50.0  # in milliseconds
 
-# To be determined
+
+def heurestic(start, goal):
+    # Manhatan distance
+    return abs(start[0] - goal[0]) + abs(start[1] - goal[1])
+
+# Completly custom made shortest path algorithm for the maze
+# For each node it goes through the four possible neightbours and filters based
+# on if they are valid nodes (visited by the robot), then if they have been visited before (ignores them),
+# and if they are dead ends (ignores)
+# Then from the left over options for this node, it selects the one which is closer to the goal.
+# If there is no possible move, then it is a dead end, so it take as step back, marks the node as dead, and tries again.
+# COPIED FROM MY PRACTICAL ROBOTICS PROJECT
 
 
-def correctOrientation(clientID, drone_target_position, drone, margin):
-    drone_position = sim.simxGetObjectPosition(
-        clientID, drone, -1, sim.simx_opmode_oneshot)[1]
-
-# To be determined
-
-
-def correctTargetError(clientID, drone_target_position, drone, margin):
-    pass
+def find_shortest_path(maze_map, start, goal):
+    possible_moves = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+    path = np.zeros([21, 21], dtype=int)
+    visited_nodes = list(start)
+    dead_nodes = list(start)
+    grid_position = start
+    path[grid_position[0]][grid_position[1]] = 1
+    while (grid_position != goal):
+        min_h = 400  # The highest possible h value
+        best_node = grid_position
+        for move in possible_moves:
+            next_node = [grid_position[0]+move[0], grid_position[1]+move[1]]
+            if (maze_map[next_node[0]][next_node[1]] != 0 and (not next_node in visited_nodes) and (not next_node in dead_nodes)):
+                h = heurestic(next_node, goal)
+                if (h < min_h):
+                    min_h = h
+                    best_node = next_node
+        if (min_h == 400):  # No possible paths
+            path[grid_position[0], grid_position[1]] = 0
+            dead_nodes.append(grid_position)
+            for move in possible_moves:
+                next_node = [grid_position[0] +
+                             move[0], grid_position[1]+move[1]]
+                if ((next_node in visited_nodes) and (not next_node in dead_nodes)):
+                    grid_position = next_node
+                    break
+        else:
+            path[grid_position[0]][grid_position[1]] = 1
+            grid_position = best_node
+            visited_nodes.append(best_node)
+    return path
 
 # Converts the pixel coordinates from the map to world coordinates for the robots
 
@@ -189,8 +222,6 @@ def main(drone_queue):
 
             # Elevate drone and start scanning movement
             if (drone_target_res is sim.simx_return_ok):
-                correctOrientation(clientID, drone_target_position, drone, 0.1)
-                correctTargetError(clientID, drone_target_position, drone, 0.1)
 
                 if (not np.allclose(drone_target_position, [0.0, 0.0, 9.0])):
                     drone_target_position = moveToCentre(
