@@ -73,14 +73,15 @@ class RRT:
                     break
             # Check whether it reaches the goal.
             if self.calc_dist_to_goal(self.node_list[-1].x, self.node_list[-1].y) <= self.expand_dis:
-                final_node = self.steer(self.node_list[-1], self.end, self.expand_dis)
+                final_node = self.steer(
+                    self.node_list[-1], self.end, self.expand_dis)
                 if self.check_collision(final_node, self.obstacle_list):
                     return self.generate_final_course()
         return None
 
     def steer(self, from_node: Node, to_node: Node, expand_length=float("inf")):
         """Expand the tree from from_node to to_node.
-        
+
         :param from_node: from which node to expand
         :param to_node: to which node to expand
         :param expand_length: expand length
@@ -149,7 +150,8 @@ class RRT:
         :param rnd_node: the target node
         :return: the nearest node to rnd_node in node_list
         """
-        distances = [(node.x - rnd_node.x) ** 2 + (node.y - rnd_node.y) ** 2 for node in node_list]
+        distances = [(node.x - rnd_node.x) ** 2 + (node.y -
+                                                   rnd_node.y) ** 2 for node in node_list]
         nearest = distances.index(min(distances))
         return nearest
 

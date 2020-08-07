@@ -15,7 +15,6 @@ import time
 import numpy as np
 from RRT import RRT
 from utils import get_obstacles, draw_path
-from utils import *
 
 # Program Constants
 SCR_WIDTH = 512
@@ -32,7 +31,6 @@ def path_planning(start, goal, image: np.ndarray):
     :return: the solution
     """
     print("Started path planning...")
-    print(image[goal[0], goal[1]])
     obstacles = get_obstacles(image)
     # Initialize RRT Motion Planner.
     rrt = RRT(tuple(start), tuple(goal), obstacles, (0, 512), expand_dis=20,
@@ -287,8 +285,8 @@ def main(drone_queue):
                             final_map = proccessToFinalMap(binary_map)
 
                             end_point[1] += 20
-                            #solution_map = path_planning(start_point, end_point, binary_map)
-                            #cv2.imshow("Path-finding Map", draw_path(binary_map, solution_map))
+                            solution_map = path_planning(
+                                start_point, end_point, final_map)
 
                             drawn_map = np.copy(final_map)
                             drawn_map = cv2.cvtColor(
@@ -297,13 +295,13 @@ def main(drone_queue):
                                        10, (0, 0, 255), -1)
                             cv2.circle(drawn_map, tuple(end_point),
                                        10, (255, 0, 0), -1)
-                            cv2.imshow("Drawn Map", drawn_map)
+                            cv2.imshow("Drawn Map", draw_path(
+                                drawn_map, solution_map))
                 else:
                     drone_target_res, drone_target_position = sim.simxGetObjectPosition(
                         clientID, drone_target, -1, sim.simx_opmode_oneshot)
                     start_point = worldToCameraCoord2D([drone_target_position[0], drone_target_position[1]], [
                                                        10.0, 10.0], [-10.0, -10.0], [0.0, 0.0], [SCR_WIDTH, SCR_HEIGHT])
-                    print(start_point)
 
             key = cv2.waitKey(1) & 0xFF
             if (key == ord('q')):
