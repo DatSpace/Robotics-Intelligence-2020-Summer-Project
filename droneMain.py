@@ -13,6 +13,9 @@ import sim
 import cv2
 import time
 import numpy as np
+from RRT import RRT
+from utils import get_obstacles, draw_path
+from utils import *
 
 # Program Constants
 SCR_WIDTH = 512
@@ -22,49 +25,22 @@ DRONE_GOAL_HEIGHT = 8.0
 ROBOT_RADIUS_PIXELS = 10  # Based on an image of 512x512
 
 
-def heurestic(start, goal):
-    # Manhatan distance
-    return abs(start[0] - goal[0]) + abs(start[1] - goal[1])
+def path_planning(start, goal, image: np.ndarray):
+    """Find the solution of the maze.
 
-# Completly custom made shortest path algorithm for the maze
-# For each node it goes through the four possible neightbours and filters based
-# on if they are valid nodes (visited by the robot), then if they have been visited before (ignores them),
-# and if they are dead ends (ignores)
-# Then from the left over options for this node, it selects the one which is closer to the goal.
-# If there is no possible move, then it is a dead end, so it take as step back, marks the node as dead, and tries again.
-# COPIED FROM MY PRACTICAL ROBOTICS PROJECT
-
-
-def find_shortest_path(maze_map, start, goal):
-    possible_moves = [[1, 0], [-1, 0], [0, 1], [0, -1]]
-    path = np.zeros([21, 21], dtype=int)
-    visited_nodes = list(start)
-    dead_nodes = list(start)
-    grid_position = start
-    path[grid_position[0]][grid_position[1]] = 1
-    while (grid_position != goal):
-        min_h = 400  # The highest possible h value
-        best_node = grid_position
-        for move in possible_moves:
-            next_node = [grid_position[0]+move[0], grid_position[1]+move[1]]
-            if (maze_map[next_node[0]][next_node[1]] != 0 and (not next_node in visited_nodes) and (not next_node in dead_nodes)):
-                h = heurestic(next_node, goal)
-                if (h < min_h):
-                    min_h = h
-                    best_node = next_node
-        if (min_h == 400):  # No possible paths
-            path[grid_position[0], grid_position[1]] = 0
-            dead_nodes.append(grid_position)
-            for move in possible_moves:
-                next_node = [grid_position[0] +
-                             move[0], grid_position[1]+move[1]]
-                if ((next_node in visited_nodes) and (not next_node in dead_nodes)):
-                    grid_position = next_node
-                    break
-        else:
-            path[grid_position[0]][grid_position[1]] = 1
-            grid_position = best_node
-            visited_nodes.append(best_node)
+    :param img: the image of the maze
+    :return: the solution
+    """
+    print("Started path planning...")
+    print(image[goal[0], goal[1]])
+    obstacles = get_obstacles(image)
+    # Initialize RRT Motion Planner.
+    rrt = RRT(tuple(start), tuple(goal), obstacles, (0, 512), expand_dis=20,
+              goal_sample_rate=35, path_resolution=10, max_iter=50000)
+    # Plan the path.
+    path = rrt.path_planning(image.copy())
+    if path is None:
+        raise Exception("Cannot find the path.")
     return path
 
 # Processes the binary image to account for the size of the ground robot
@@ -86,7 +62,6 @@ def proccessToFinalMap(binary_map):
                             if ((k ** 2.0) + (l ** 2.0) <= ROBOT_RADIUS_PIXELS ** 2.0):
                                 if (final_map[x][y] == 0):
                                     final_map[x][y] = 255
-    cv2.imshow("Processed Map", final_map)
     return final_map
 
 # Converts the pixel coordinates from the map to world coordinates for the robots
@@ -230,6 +205,7 @@ def flyBackward(clientID, drone_target, drone_target_position, step):
 def main(drone_queue):
     drone_target_position = np.array([0, 0, 0])
     binary_map = np.array([])
+    final_map = np.array([])
     start_point = [None, None]
     end_point = [None, None]
 
@@ -275,8 +251,9 @@ def main(drone_queue):
         while (sim.simxGetConnectionId(clientID) != -1):
             start_ms = int(round(time.time() * 1000))
 
-            if (binary_map.size != 0):
-                cv2.imshow("Map View", binary_map)
+            if (final_map.size != 0):
+                cv2.imshow("Pre-processed Map", binary_map)
+                cv2.imshow("Post-processed Map", final_map)
                 pass
             else:
                 # Elevate drone and start scanning movement
@@ -307,7 +284,24 @@ def main(drone_queue):
                             filtered_map = getFilteredMap(original_image)
                             binary_map = getBinaryMap(filtered_map)
 
-                            proccessToFinalMap(binary_map)
+                            final_map = proccessToFinalMap(binary_map)
+
+                            end_point[1] += 10
+                            solution_map = path_planning(
+                                start_point, end_point, binary_map)
+                            cv2.imshow("Path-finding Map",
+                                       draw_path(binary_map, solution_map))
+
+                            print(start_point)
+                            print(end_point)
+                            drawn_map = np.copy(final_map)
+                            drawn_map = cv2.cvtColor(
+                                drawn_map, cv2.COLOR_GRAY2BGR)
+                            cv2.circle(drawn_map, tuple(start_point),
+                                       10, (0, 0, 255), -1)
+                            cv2.circle(drawn_map, tuple(end_point),
+                                       10, (255, 0, 0), -1)
+                            cv2.imshow("Drawn Map", drawn_map)
                 else:
                     drone_target_res, drone_target_position = sim.simxGetObjectPosition(
                         clientID, drone_target, -1, sim.simx_opmode_oneshot)
@@ -333,4 +327,4 @@ def main(drone_queue):
     print('Simulation has ended...')
 
 
-# main(None)
+main(None)
