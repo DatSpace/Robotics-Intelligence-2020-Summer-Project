@@ -333,4 +333,4 @@ def main(drone_queue):
     print('Simulation has ended...')
 
 
-main(None)
+# main(None)
