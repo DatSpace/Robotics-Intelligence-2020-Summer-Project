@@ -76,10 +76,10 @@ def cameraToWorldCoord2D(current_pos, camera_min, camera_max, world_min, world_m
 
 
 def worldToCameraCoord2D(current_pos, world_min, world_max, camera_min, camera_max):
-    mapX = int((current_pos[0] - world_min[0]) * (world_max[0] -
-                                                  camera_min[0]) / (camera_max[0] - world_min[0]) + camera_min[0])
-    mapY = int((current_pos[1] - world_min[1]) * (world_max[1] -
-                                                  camera_min[1]) / (camera_max[1] - world_min[1]) + camera_min[1])
+    mapX = int((current_pos[0] - world_min[0]) * (camera_max[0] -
+                                                  camera_min[0]) / (world_max[0] - world_min[0]) + camera_min[0])
+    mapY = int((current_pos[1] - world_min[1]) * (camera_max[1] -
+                                                  camera_min[1]) / (world_max[1] - world_min[1]) + camera_min[1])
     return np.array([mapX, mapY])
 
 
@@ -286,14 +286,10 @@ def main(drone_queue):
 
                             final_map = proccessToFinalMap(binary_map)
 
-                            end_point[1] += 10
-                            solution_map = path_planning(
-                                start_point, end_point, binary_map)
-                            cv2.imshow("Path-finding Map",
-                                       draw_path(binary_map, solution_map))
+                            end_point[1] += 20
+                            #solution_map = path_planning(start_point, end_point, binary_map)
+                            #cv2.imshow("Path-finding Map", draw_path(binary_map, solution_map))
 
-                            print(start_point)
-                            print(end_point)
                             drawn_map = np.copy(final_map)
                             drawn_map = cv2.cvtColor(
                                 drawn_map, cv2.COLOR_GRAY2BGR)
@@ -306,7 +302,8 @@ def main(drone_queue):
                     drone_target_res, drone_target_position = sim.simxGetObjectPosition(
                         clientID, drone_target, -1, sim.simx_opmode_oneshot)
                     start_point = worldToCameraCoord2D([drone_target_position[0], drone_target_position[1]], [
-                                                       -10.0, -10.0], [10.0, 10.0], [0.0, 0.0], [SCR_WIDTH, SCR_HEIGHT])
+                                                       10.0, 10.0], [-10.0, -10.0], [0.0, 0.0], [SCR_WIDTH, SCR_HEIGHT])
+                    print(start_point)
 
             key = cv2.waitKey(1) & 0xFF
             if (key == ord('q')):
