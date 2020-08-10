@@ -13,8 +13,7 @@ import sim
 import cv2
 import time
 import numpy as np
-from RRT import RRT
-from utils import get_obstacles, draw_path
+from RRT import rapidlyExploringRandomTree
 
 # Program Constants
 SCR_WIDTH = 512
@@ -22,24 +21,6 @@ SCR_HEIGHT = 512
 SIMULATION_STEP = 50.0  # in milliseconds
 DRONE_GOAL_HEIGHT = 8.0
 ROBOT_RADIUS_PIXELS = 10  # Based on an image of 512x512
-
-
-def path_planning(start, goal, image: np.ndarray):
-    """Find the solution of the maze.
-
-    :param img: the image of the maze
-    :return: the solution
-    """
-    print("Started path planning...")
-    obstacles = get_obstacles(image)
-    # Initialize RRT Motion Planner.
-    rrt = RRT(tuple(start), tuple(goal), obstacles, (0, 512), expand_dis=20,
-              goal_sample_rate=35, path_resolution=10, max_iter=50000)
-    # Plan the path.
-    path = rrt.path_planning(image.copy())
-    if path is None:
-        raise Exception("Cannot find the path.")
-    return path
 
 # Processes the binary image to account for the size of the ground robot
 
@@ -277,7 +258,11 @@ def main(drone_queue):
                             final_map = proccessToFinalMap(binary_map)
 
                             end_point[1] += 20
-                            #solution_map = path_planning(start_point, end_point, final_map)
+                            path = rapidlyExploringRandomTree(
+                                image, start_point, end_point)
+
+                            # TEMPORARY
+                            print(path)
 
                             drawn_map = np.copy(final_map)
                             drawn_map = cv2.cvtColor(
