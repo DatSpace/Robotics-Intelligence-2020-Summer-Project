@@ -152,11 +152,17 @@ def connectPoints(a, b, img):
 
     if not blocked:
         newPoints.append([a[0], a[1]])
-    return newPoints
+
+    # Rounds the found points before returning them
+    roundedNewPoints = []
+    for point in newPoints:
+        newPoint = [int(i) for i in point]
+        roundedNewPoints.append(newPoint)
+    return roundedNewPoints
 
 
 def findNearestPoint(points, point):
-    min_distance = 999999999  # Highest
+    min_distance = 724  # Max diagonal distance for 512x512
     best_point = (0, 0)
     for p in points:
         if p == point:

@@ -261,9 +261,6 @@ def main(drone_queue):
                             path = rapidlyExploringRandomTree(
                                 final_map, start_point, end_point)
 
-                            # TEMPORARY
-                            print(path)
-
                             drawn_map = np.copy(final_map)
                             drawn_map = cv2.cvtColor(
                                 drawn_map, cv2.COLOR_GRAY2BGR)
@@ -271,8 +268,14 @@ def main(drone_queue):
                                 start_point), 10, (255, 0, 0), -1)
                             cv2.circle(drawn_map, tuple(
                                 end_point), 10, (0, 0, 255), -1)
-                            cv2.imshow("Drawn Map", drawn_map)
-                            #cv2.imshow("Drawn Map", draw_path(drawn_map, solution_map))
+
+                            if (path is not None):
+                                for point in path:
+                                    cv2.circle(drawn_map, tuple(
+                                        point), 2, (0, 255, 0), -1)
+                                cv2.imshow("Drawn Map", drawn_map)
+                            else:
+                                print("No path found...")
                 else:
                     drone_target_res, drone_target_position = sim.simxGetObjectPosition(
                         clientID, drone_target, -1, sim.simx_opmode_oneshot)
