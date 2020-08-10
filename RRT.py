@@ -13,7 +13,7 @@ def rapidlyExploringRandomTree(img, start, goal, seed=None):
     graph = []
     points.append(start)
     graph.append((start, []))
-    print('Generating and conecting random points')
+    print('Generating and connecting random points...')
     occupied = True
     phaseTwo = False
 

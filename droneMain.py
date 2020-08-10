@@ -259,7 +259,7 @@ def main(drone_queue):
 
                             end_point[1] += 20
                             path = rapidlyExploringRandomTree(
-                                image, start_point, end_point)
+                                final_map, start_point, end_point)
 
                             # TEMPORARY
                             print(path)
@@ -277,7 +277,7 @@ def main(drone_queue):
                     drone_target_res, drone_target_position = sim.simxGetObjectPosition(
                         clientID, drone_target, -1, sim.simx_opmode_oneshot)
                     start_point = worldToCameraCoord2D([drone_target_position[0], drone_target_position[1]], [
-                                                       10.0, 10.0], [-10.0, -10.0], [0.0, 0.0], [SCR_WIDTH, SCR_HEIGHT])
+                        10.0, 10.0], [-10.0, -10.0], [0.0, 0.0], [SCR_WIDTH, SCR_HEIGHT]).tolist()
 
             key = cv2.waitKey(1) & 0xFF
             if (key == ord('q')):
@@ -296,3 +296,7 @@ def main(drone_queue):
     else:
         print('Failed connecting to remote API server...')
     print('Simulation has ended...')
+
+
+if __name__ == "__main__":
+    main(None)
