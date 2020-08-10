@@ -1,17 +1,12 @@
-import numpy as np
-from matplotlib import pyplot as ppl
-from matplotlib import cm
 import random
 import math
-import cv2
 
 MIN_NUM_VERT = 20  # Minimum number of vertex in the graph
 MAX_NUM_VERT = 1500  # Maximum number of vertex in the graph
 STEP_DISTANCE = 20  # Maximum distance between two vertex
-SEED = None  # For random numbers
 
 
-def rapidlyExploringRandomTree(ax, img, start, goal, seed=None):
+def rapidlyExploringRandomTree(img, start, goal, seed=None):
     hundreds = 100
     random.seed(seed)
     points = []
@@ -52,10 +47,9 @@ def rapidlyExploringRandomTree(ax, img, start, goal, seed=None):
 
         nearest = findNearestPoint(points, point)
         newPoints = connectPoints(point, nearest, img)
-        addToGraph(ax, graph, newPoints, point)
+        addToGraph(graph, newPoints, point)
         newPoints.pop(0)  # The first element is already in the points list
         points.extend(newPoints)
-        ppl.draw()
         i = i + 1
 
         if len(points) >= MIN_NUM_VERT:
@@ -66,20 +60,14 @@ def rapidlyExploringRandomTree(ax, img, start, goal, seed=None):
         if phaseTwo:
             nearest = findNearestPoint(points, goal)
             newPoints = connectPoints(goal, nearest, img)
-            addToGraph(ax, graph, newPoints, goal)
+            addToGraph(graph, newPoints, goal)
             newPoints.pop(0)
             points.extend(newPoints)
-            ppl.draw()
 
     if goal in points:
         print('Goal found, total vertex in graph:', len(
             points), 'total random points generated:', i)
         path = searchPath(graph, start, [start])
-
-        for i in range(len(path)-1):
-            ax.plot([path[i][0], path[i+1][0]], [path[i][1], path[i+1]
-                                                 [1]], color='g', linestyle='-', linewidth=2)
-            ppl.draw()
 
         print('Showing resulting map')
         print('Final path:', path)
@@ -91,7 +79,6 @@ def rapidlyExploringRandomTree(ax, img, start, goal, seed=None):
               'total random points generated:', i)
         print('Showing resulting map')
 
-    ppl.show()
     return path
 
 
@@ -113,25 +100,13 @@ def searchPath(graph, point, path):
             path.pop()
 
 
-def addToGraph(ax, graph, newPoints, point):
+def addToGraph(graph, newPoints, point):
     if len(newPoints) > 1:  # If there is anything to add to the graph
         for p in range(len(newPoints) - 1):
             nearest = [nearest for nearest in graph if (
                 nearest[0] == [newPoints[p][0], newPoints[p][1]])]
             nearest[0][1].append(newPoints[p + 1])
             graph.append((newPoints[p + 1], []))
-
-            if not p == 0:
-                # First point is already painted
-                ax.plot(newPoints[p][0], newPoints[p][1], '+k')
-            ax.plot([newPoints[p][0], newPoints[p+1][0]], [newPoints[p][1],
-                                                           newPoints[p+1][1]], color='k', linestyle='-', linewidth=1)
-
-        if point in newPoints:
-            ax.plot(point[0], point[1], '.g')  # Last point is green
-        else:
-            ax.plot(newPoints[p + 1][0], newPoints[p + 1]
-                    [1], '+k')  # Last point is not green
 
 
 def connectPoints(a, b, img):
@@ -182,28 +157,13 @@ def connectPoints(a, b, img):
 
 
 def findNearestPoint(points, point):
-    best = (999999999, 999999999, 999999999)
+    min_distance = 999999999  # Highest
+    best_point = (0, 0)
     for p in points:
         if p == point:
             continue
         dist = math.sqrt((p[0] - point[0]) ** 2 + (p[1] - point[1]) ** 2)
-        if dist < best[2]:
-            best = (p[0], p[1], dist)
-    return (best[0], best[1])
-
-
-def main():
-    img = cv2.imread(
-        'D:\\Coding\\Python\\irgroup1\\final_map.png', cv2.IMREAD_GRAYSCALE)
-    fig = ppl.gcf()
-    fig.clf()
-    ax = fig.add_subplot(1, 1, 1)
-    ax.imshow(img, cmap=cm.Greys_r)
-    ax.axis('image')
-    ppl.draw()
-    print('Map is', len(img[0]), 'x', len(img))
-    path = rapidlyExploringRandomTree(
-        ax, img, [448, 448], [180, 34], seed=SEED)
-
-
-main()
+        if dist < min_distance:
+            min_distance = dist
+            best_point = (p[0], p[1])
+    return best_point

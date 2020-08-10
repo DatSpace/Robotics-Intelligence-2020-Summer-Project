@@ -1,15 +1,15 @@
 import cv2
-from RRT
+from RRT import rapidlyExploringRandomTree
 
 start_point = [448, 448]
-end_point = [34, 180]  # Reversed due to arrays columns/rows 180,34
+end_point = [180, 34]
 
 
 def main():
 
     #image = cv2.imread("D:\\Coding\\Python\\irgroup1\\final_map.png", cv2.IMREAD_GRAYSCALE)
     image = cv2.imread(
-        "D:\\Coding\\Python\\irgroup1\\original_map.png", cv2.IMREAD_GRAYSCALE)
+        "D:\\Coding\\Python\\irgroup1\\final_map.png", cv2.IMREAD_GRAYSCALE)
     # path = find_shortest_path(image, start_point, end_point)
     # for pixel in path:
     #     pixel *= 255
@@ -20,9 +20,10 @@ def main():
     # print("Showing...")
     #cv2.imshow("Original", image)
     #cv2.imshow("t", path)
-    solution_map = path_planning(start_point, end_point, image)
-    cv2.imshow("Drawn Map", draw_path(image, solution_map))
-    cv2.waitKey(0)
+    path = rapidlyExploringRandomTree(image, start_point, end_point)
+    #solution_map = path_planning(start_point, end_point, image)
+    #cv2.imshow("Drawn Map", draw_path(image, solution_map))
+    # cv2.waitKey(0)
 
 
 main()
