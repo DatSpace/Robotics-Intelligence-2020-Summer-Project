@@ -48,18 +48,10 @@ def proccessToFinalMap(binary_map):
     print("Started processing of binary image...")
     final_map = np.copy(binary_map)
 
-    # 104,857,600 iterations :D :D :D
     for i in range(SCR_WIDTH):
         for j in range(SCR_HEIGHT):
             if (binary_map[i][j] == 255):
-                for k in range(-ROBOT_RADIUS_PIXELS, ROBOT_RADIUS_PIXELS + 1):
-                    x = i + k
-                    for l in range(-ROBOT_RADIUS_PIXELS, ROBOT_RADIUS_PIXELS + 1):
-                        y = j + l
-                        if (x >= 0 and y >= 0 and x < SCR_WIDTH and y < SCR_HEIGHT):
-                            if ((k ** 2.0) + (l ** 2.0) <= ROBOT_RADIUS_PIXELS ** 2.0):
-                                if (final_map[x][y] == 0):
-                                    final_map[x][y] = 255
+                cv2.circle(final_map, (j, i), ROBOT_RADIUS_PIXELS, 255)
     return final_map
 
 # Converts the pixel coordinates from the map to world coordinates for the robots
@@ -281,22 +273,21 @@ def main(drone_queue):
 
                             filtered_map = getFilteredMap(original_image)
                             binary_map = getBinaryMap(filtered_map)
-
+                            cv2.imwrite("original_map.png", binary_map)
                             final_map = proccessToFinalMap(binary_map)
 
                             end_point[1] += 20
-                            solution_map = path_planning(
-                                start_point, end_point, final_map)
+                            #solution_map = path_planning(start_point, end_point, final_map)
 
                             drawn_map = np.copy(final_map)
                             drawn_map = cv2.cvtColor(
                                 drawn_map, cv2.COLOR_GRAY2BGR)
-                            cv2.circle(drawn_map, tuple(start_point),
-                                       10, (0, 0, 255), -1)
-                            cv2.circle(drawn_map, tuple(end_point),
-                                       10, (255, 0, 0), -1)
-                            cv2.imshow("Drawn Map", draw_path(
-                                drawn_map, solution_map))
+                            cv2.circle(drawn_map, tuple(
+                                start_point), 10, (255, 0, 0), -1)
+                            cv2.circle(drawn_map, tuple(
+                                end_point), 10, (0, 0, 255), -1)
+                            cv2.imshow("Drawn Map", drawn_map)
+                            #cv2.imshow("Drawn Map", draw_path(drawn_map, solution_map))
                 else:
                     drone_target_res, drone_target_position = sim.simxGetObjectPosition(
                         clientID, drone_target, -1, sim.simx_opmode_oneshot)

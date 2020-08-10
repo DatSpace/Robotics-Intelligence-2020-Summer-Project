@@ -1,186 +1,209 @@
-import random
-from typing import List, Tuple
-
-import cv2
-import math
 import numpy as np
+from matplotlib import pyplot as ppl
+from matplotlib import cm
+import random
+import math
+import cv2
+
+MIN_NUM_VERT = 20  # Minimum number of vertex in the graph
+MAX_NUM_VERT = 1500  # Maximum number of vertex in the graph
+STEP_DISTANCE = 20  # Maximum distance between two vertex
+SEED = None  # For random numbers
 
 
-class RRT:
-    """RRT Motion Planning.
-    """
+def rapidlyExploringRandomTree(ax, img, start, goal, seed=None):
+    hundreds = 100
+    random.seed(seed)
+    points = []
+    graph = []
+    points.append(start)
+    graph.append((start, []))
+    print('Generating and conecting random points')
+    occupied = True
+    phaseTwo = False
 
-    class Node:
-        """RRT Node.
-        """
+    # Phase two values (points 5 step distances around the goal point)
+    minX = max(goal[0] - 5 * STEP_DISTANCE, 0)
+    maxX = min(goal[0] + 5 * STEP_DISTANCE, len(img[0]) - 1)
+    minY = max(goal[1] - 5 * STEP_DISTANCE, 0)
+    maxY = min(goal[1] + 5 * STEP_DISTANCE, len(img) - 1)
 
-        def __init__(self, x: float, y: float):
-            self.x = x
-            self.y = y
-            self.path_x = []
-            self.path_y = []
-            self.parent = None  # type:None | RRT.Node
+    i = 0
+    while (goal not in points) and (len(points) < MAX_NUM_VERT):
+        if (i % 100) == 0:
+            print(i, 'points randomly generated')
 
-    def __init__(self, start: Tuple[int, int], goal: Tuple[int, int], obstacle_list: List[Tuple[int, int, int]],
-                 rand_area: Tuple[int, int],
-                 expand_dis=3.0, path_resolution=0.5, goal_sample_rate=5, max_iter=500):
-        """Initialize the RRT Motion Planner.
+        if (len(points) % hundreds) == 0:
+            print(len(points), 'vertex generated')
+            hundreds = hundreds + 100
 
-        :param start: Start Position
-        :param goal:  Goal Position
-        :param obstacle_list: the list of obstacles
-        :param rand_area: random sampling area
-        :param expand_dis: distance of one expanding
-        :param path_resolution: path resolution
-        :param goal_sample_rate: gaol sample rate
-        :param max_iter: max amount of iterations
-        """
-        self.start = self.Node(start[0], start[1])
-        self.end = self.Node(goal[0], goal[1])
-        self.min_rand = rand_area[0]
-        self.max_rand = rand_area[1]
-        self.expand_dis = expand_dis
-        self.path_resolution = path_resolution
-        self.goal_sample_rate = goal_sample_rate
-        self.max_iter = max_iter
-        self.obstacle_list = obstacle_list
-        self.node_list = []
+        while(occupied):
+            if phaseTwo and (random.random() > 0.8):
+                point = [random.randint(minX, maxX),
+                         random.randint(minY, maxY)]
+            else:
+                point = [random.randint(0, len(img[0]) - 1),
+                         random.randint(0, len(img) - 1)]
 
-    def path_planning(self, img: np.ndarray):
-        """Find the solution of the maze.
+            if(img[point[1]][point[0]] == 0):
+                occupied = False
 
-        :param img: the image of maze
-        :return: the solution path
-        """
-        self.node_list = [self.start]
-        for i in range(self.max_iter):
-            # Generate a sample node.
-            rnd_node = self.get_random_node()
-            # Find the nearest node to the rnd_node.
-            nearest_ind = self.get_nearest_node_index(self.node_list, rnd_node)
-            nearest_node = self.node_list[nearest_ind]
-            # Expand the tree.
-            new_node = self.steer(nearest_node, rnd_node, self.expand_dis)
-            # When there are no collisions, add new_node to the tree.
-            if self.check_collision(new_node, self.obstacle_list):
-                self.node_list.append(new_node)
-                # Show the expanding process.
-                tmp = self.node_list[-1]
-                x, y = int(tmp.x), int(tmp.y)
-                img[x][y] = 255
-                cv2.imshow("Processing", img)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
-            # Check whether it reaches the goal.
-            if self.calc_dist_to_goal(self.node_list[-1].x, self.node_list[-1].y) <= self.expand_dis:
-                final_node = self.steer(
-                    self.node_list[-1], self.end, self.expand_dis)
-                if self.check_collision(final_node, self.obstacle_list):
-                    return self.generate_final_course()
-        return None
+        occupied = True
 
-    def steer(self, from_node: Node, to_node: Node, expand_length=float("inf")):
-        """Expand the tree from from_node to to_node.
+        nearest = findNearestPoint(points, point)
+        newPoints = connectPoints(point, nearest, img)
+        addToGraph(ax, graph, newPoints, point)
+        newPoints.pop(0)  # The first element is already in the points list
+        points.extend(newPoints)
+        ppl.draw()
+        i = i + 1
 
-        :param from_node: from which node to expand
-        :param to_node: to which node to expand
-        :param expand_length: expand length
-        :return: the new node
-        """
-        new_node = self.Node(from_node.x, from_node.y)
-        d, theta = self.calc_distance_and_angle(new_node, to_node)
-        new_node.path_x = [new_node.x]
-        new_node.path_y = [new_node.y]
-        if expand_length > d:
-            expand_length = d
-        n_expand = math.floor(expand_length / self.path_resolution)
-        for _ in range(n_expand):
-            new_node.x += self.path_resolution * math.cos(theta)
-            new_node.y += self.path_resolution * math.sin(theta)
-            new_node.path_x.append(new_node.x)
-            new_node.path_y.append(new_node.y)
-        d, _ = self.calc_distance_and_angle(new_node, to_node)
-        if d <= self.path_resolution:
-            new_node.path_x.append(to_node.x)
-            new_node.path_y.append(to_node.y)
-        new_node.parent = from_node
-        return new_node
+        if len(points) >= MIN_NUM_VERT:
+            if not phaseTwo:
+                print('Phase Two')
+            phaseTwo = True
 
-    def generate_final_course(self):
-        """Generate the final path to Goal Position.
+        if phaseTwo:
+            nearest = findNearestPoint(points, goal)
+            newPoints = connectPoints(goal, nearest, img)
+            addToGraph(ax, graph, newPoints, goal)
+            newPoints.pop(0)
+            points.extend(newPoints)
+            ppl.draw()
 
-        :return: the final path to Goal Position
-        """
-        path = [(self.end.x, self.end.y)]  # type:List[Tuple[float,float]]
-        node = self.node_list[len(self.node_list) - 1]
-        while node.parent is not None:
-            path.append((node.x, node.y))
-            node = node.parent
-        path.append((node.x, node.y))
-        return path[::-1]
+    if goal in points:
+        print('Goal found, total vertex in graph:', len(
+            points), 'total random points generated:', i)
+        path = searchPath(graph, start, [start])
 
-    def calc_dist_to_goal(self, x: float, y: float):
-        """Calculate the distance between node (x, y) and Goal Position.
+        for i in range(len(path)-1):
+            ax.plot([path[i][0], path[i+1][0]], [path[i][1], path[i+1]
+                                                 [1]], color='g', linestyle='-', linewidth=2)
+            ppl.draw()
 
-        :param x: the x-coordinate of the node
-        :param y: the y-coordinate of the node
-        :return: the distance between node (x, y) and Goal Position
-        """
-        dx = x - self.end.x
-        dy = y - self.end.y
-        return math.sqrt(dx ** 2 + dy ** 2)
+        print('Showing resulting map')
+        print('Final path:', path)
+        print('The final path is made from:', len(path), 'connected points')
+    else:
+        path = None
+        print('Reached maximum number of vertex and goal was not found')
+        print('Total vertex in graph:', len(points),
+              'total random points generated:', i)
+        print('Showing resulting map')
 
-    def get_random_node(self):
-        """Generate a random RRT.Node
+    ppl.show()
+    return path
 
-        :return: a random RRT.Node
-        """
-        if random.randint(0, 100) > self.goal_sample_rate:  # Do random sampling.
-            rnd = self.Node(random.uniform(self.min_rand, self.max_rand),
-                            random.uniform(self.min_rand, self.max_rand))
-        else:  # Do goal point sampling.
-            rnd = self.Node(self.end.x, self.end.y)
-        return rnd
 
-    @staticmethod
-    def get_nearest_node_index(node_list: List[Node], rnd_node: Node):
-        """Find the nearest node to rnd_node in node_list.
+def searchPath(graph, point, path):
+    for i in graph:
+        if point == i[0]:
+            p = i
 
-        :param node_list: the candidate nodes
-        :param rnd_node: the target node
-        :return: the nearest node to rnd_node in node_list
-        """
-        distances = [(node.x - rnd_node.x) ** 2 + (node.y -
-                                                   rnd_node.y) ** 2 for node in node_list]
-        nearest = distances.index(min(distances))
-        return nearest
+    if p[0] == graph[-1][0]:
+        return path
 
-    @staticmethod
-    def check_collision(node: Node, obstacles: List[Tuple[int, int, int]]):
-        """Check the node whether collides with obstacles.
+    for link in p[1]:
+        path.append(link)
+        finalPath = searchPath(graph, link, path)
 
-        :param node: a RRT.Node
-        :param obstacles: obstacles list
-        :return: whether the node collides with obstacles
-        """
-        for (ox, oy, size) in obstacles:
-            dx_list = [ox - x for x in node.path_x]
-            dy_list = [oy - y for y in node.path_y]
-            d_list = [dx * dx + dy * dy for (dx, dy) in zip(dx_list, dy_list)]
-            if min(d_list) <= size ** 2:
-                return False
-        return True
+        if finalPath != None:
+            return finalPath
+        else:
+            path.pop()
 
-    @staticmethod
-    def calc_distance_and_angle(from_node: Node, to_node: Node):
-        """Calculate the distance and angle between two nodes.
 
-        :param from_node: a RRT.Node
-        :param to_node: a RRT.Node
-        :return: the distance and angle
-        """
-        dx = to_node.x - from_node.x
-        dy = to_node.y - from_node.y
-        d = math.sqrt(dx ** 2 + dy ** 2)
-        theta = math.atan2(dy, dx)
-        return d, theta
+def addToGraph(ax, graph, newPoints, point):
+    if len(newPoints) > 1:  # If there is anything to add to the graph
+        for p in range(len(newPoints) - 1):
+            nearest = [nearest for nearest in graph if (
+                nearest[0] == [newPoints[p][0], newPoints[p][1]])]
+            nearest[0][1].append(newPoints[p + 1])
+            graph.append((newPoints[p + 1], []))
+
+            if not p == 0:
+                # First point is already painted
+                ax.plot(newPoints[p][0], newPoints[p][1], '+k')
+            ax.plot([newPoints[p][0], newPoints[p+1][0]], [newPoints[p][1],
+                                                           newPoints[p+1][1]], color='k', linestyle='-', linewidth=1)
+
+        if point in newPoints:
+            ax.plot(point[0], point[1], '.g')  # Last point is green
+        else:
+            ax.plot(newPoints[p + 1][0], newPoints[p + 1]
+                    [1], '+k')  # Last point is not green
+
+
+def connectPoints(a, b, img):
+    newPoints = []
+    newPoints.append([b[0], b[1]])
+    step = [(a[0] - b[0]) / float(STEP_DISTANCE),
+            (a[1] - b[1]) / float(STEP_DISTANCE)]
+
+    # Set small steps to check for walls
+    pointsNeeded = int(math.floor(max(math.fabs(step[0]), math.fabs(step[1]))))
+
+    if math.fabs(step[0]) > math.fabs(step[1]):
+        if step[0] >= 0:
+            step = [1, step[1] / math.fabs(step[0])]
+        else:
+            step = [-1, step[1] / math.fabs(step[0])]
+
+    else:
+        if step[1] >= 0:
+            step = [step[0] / math.fabs(step[1]), 1]
+        else:
+            step = [step[0]/math.fabs(step[1]), -1]
+
+    blocked = False
+    for i in range(pointsNeeded+1):  # Creates points between graph and solitary point
+        for j in range(STEP_DISTANCE):  # Check if there are walls between points
+            coordX = round(newPoints[i][0] + step[0] * j)
+            coordY = round(newPoints[i][1] + step[1] * j)
+
+            if coordX == a[0] and coordY == a[1]:
+                break
+            if coordY >= len(img) or coordX >= len(img[0]):
+                break
+            if img[int(coordY)][int(coordX)] > 0:
+                blocked = True
+            if blocked:
+                break
+
+        if blocked:
+            break
+        if not (coordX == a[0] and coordY == a[1]):
+            newPoints.append([newPoints[i][0]+(step[0]*STEP_DISTANCE),
+                              newPoints[i][1]+(step[1]*STEP_DISTANCE)])
+
+    if not blocked:
+        newPoints.append([a[0], a[1]])
+    return newPoints
+
+
+def findNearestPoint(points, point):
+    best = (999999999, 999999999, 999999999)
+    for p in points:
+        if p == point:
+            continue
+        dist = math.sqrt((p[0] - point[0]) ** 2 + (p[1] - point[1]) ** 2)
+        if dist < best[2]:
+            best = (p[0], p[1], dist)
+    return (best[0], best[1])
+
+
+def main():
+    img = cv2.imread(
+        'D:\\Coding\\Python\\irgroup1\\final_map.png', cv2.IMREAD_GRAYSCALE)
+    fig = ppl.gcf()
+    fig.clf()
+    ax = fig.add_subplot(1, 1, 1)
+    ax.imshow(img, cmap=cm.Greys_r)
+    ax.axis('image')
+    ppl.draw()
+    print('Map is', len(img[0]), 'x', len(img))
+    path = rapidlyExploringRandomTree(
+        ax, img, [448, 448], [180, 34], seed=SEED)
+
+
+main()
