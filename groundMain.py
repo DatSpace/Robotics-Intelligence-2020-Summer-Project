@@ -4,7 +4,7 @@
 # Make sure to have the server side running in CoppeliaSim:
 # in a child script of a CoppeliaSim scene, add following command
 # to be executed just once, at simulation start:
-# Miguel Cadenas
+# Miguel Cadenas is not who he thinks he is
 # simRemoteApi.start(19999)
 #
 # then start simulation, and run this program.
