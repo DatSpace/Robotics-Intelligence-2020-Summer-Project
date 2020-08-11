@@ -4,7 +4,7 @@
 # Make sure to have the server side running in CoppeliaSim:
 # in a child script of a CoppeliaSim scene, add following command
 # to be executed just once, at simulation start:
-#
+# Miguel
 # simRemoteApi.start(19999)
 #
 # then start simulation, and run this program.
@@ -185,14 +185,14 @@ if __name__ == "__main__":
                 ccLD2 = np.around(cLD2, 1)
                 #print(i1, ci2, ci3, ci4)
                 if (ccLD0 > -52 and MrY == 0):
-                    L0Speed = -3
+                    L0Speed = -0.5
                     if (ccLD2 < 60):
-                        L2Speed = 5
+                        L2Speed = 0.5
                     else:
                         L2Speed = 0
                 else:
                     L0Speed = 0
-                if(ccLD0 < -52 and ccLD2 > 60 and ci2[2] < 0.1 and i1 == True):
+                if(ccLD0 < -45 and ccLD2 > 60 and ci2[2] < 0.1 and i1 == True):
                     F1Speed = -0.5
                     F2Speed = -0.5
                     MrY = 1
@@ -201,11 +201,11 @@ if __name__ == "__main__":
                     L1Speed = 0
                     L2Speed = 0
                     if (ccLD1 < 170):
-                        L1Speed = 0.02
+                        L1Speed = 0.2
                     if(ccLD0 < -15):
-                        L0Speed = 0.02
+                        L0Speed = 0.5
                 if (ccLD0 > -15 and ccLD1 > 170 and ccLD2 > -8 and MrY == 1):
-                    L2Speed = -0.2
+                    L2Speed = -0.5
 
                 if (cXCar > 0.1 and cYCar > 0.1 and c1 == True):
                     print('GO', MrY)
@@ -214,6 +214,7 @@ if __name__ == "__main__":
 
                 print('Arm Joints Position', ccLD0, ccLD1, ccLD2)
                 print("Proximity Sensor", ci2[2], c1)
+                print(cXCar, cYCar)
 
                 cv2.imshow('View in Car', greenCar)
             elif res == sim.simx_return_novalue_flag:
@@ -274,15 +275,15 @@ if __name__ == "__main__":
                 leftMotorBSpeed = 5
                 rightMotorBSpeed = 5
             elif keypress == ord('a'):
-                leftMotorFSpeed = 5
-                rightMotorFSpeed = -5
-                leftMotorBSpeed = 5
-                rightMotorBSpeed = -5
+                leftMotorFSpeed = 2
+                rightMotorFSpeed = -2
+                leftMotorBSpeed = 2
+                rightMotorBSpeed = -2
             elif keypress == ord('d'):
-                leftMotorFSpeed = -5
-                rightMotorFSpeed = 5
-                leftMotorBSpeed = -5
-                rightMotorBSpeed = 5
+                leftMotorFSpeed = -2
+                rightMotorFSpeed = 2
+                leftMotorBSpeed = -2
+                rightMotorBSpeed = 2
             elif keypress == ord('1'):
                 L0Speed = 5
             elif keypress == ord('2'):
@@ -359,7 +360,7 @@ if __name__ == "__main__":
     # Wait until both processes have finished
     drone_queue.close()
     drone_queue.join_thread()
-    drone_process.join()
+   # drone_process.join()
 
     # Both processes finished
     print('Simulation has ended...')
