@@ -47,7 +47,7 @@ if __name__ == "__main__":
         target=drone.main, args=(drone_queue,))
 
     # Starting drone process
-    # drone_process.start()
+    drone_process.start()
 
     # Start Program and just in case, close all opened connections
     print('Program started...')
