@@ -253,6 +253,22 @@ def pickBear():
     cv2.imshow('View in Car', greenCar)
     cv2.imshow('View in Hand', green)
 
+    # Set actuators on mobile robot
+    sim.simxSetJointTargetVelocity(
+        clientID, L0, L0Speed, sim.simx_opmode_oneshot)
+    sim.simxSetJointTargetVelocity(
+        clientID, L1, L1Speed, sim.simx_opmode_oneshot)
+    sim.simxSetJointTargetVelocity(
+        clientID, L2, L2Speed, sim.simx_opmode_oneshot)
+    sim.simxSetJointTargetVelocity(
+        clientID, L3, L3Speed, sim.simx_opmode_oneshot)
+    sim.simxSetJointTargetVelocity(
+        clientID, F1, F1Speed, sim.simx_opmode_oneshot)
+    sim.simxSetJointTargetVelocity(
+        clientID, F2, F2Speed, sim.simx_opmode_oneshot)
+
+    cv2.waitKey(1)
+
 
 if __name__ == "__main__":
 
@@ -359,86 +375,6 @@ if __name__ == "__main__":
                 pickBear()
             elif(robot_state == RobotState.RETURNING):
                 pass
-
-            # Read keypresses for external control (note you must have the OpenCV image window selected when pressing keys!)
-            # I left this because it is not really an obstacle
-            # will read a value of 255 if no key is pressed
-            keypress = cv2.waitKey(1) & 0xFF
-            if keypress == ord(' '):
-                leftMotorFSpeed = 0.0
-                rightMotorFSpeed = 0.0
-                leftMotorBSpeed = 0.0
-                rightMotorBSpeed = 0.0
-            elif keypress == ord('w'):
-                leftMotorFSpeed = -.5
-                rightMotorFSpeed = -.5
-                leftMotorBSpeed = -.5
-                rightMotorBSpeed = -.5
-            elif keypress == ord('s'):
-                leftMotorFSpeed = 5
-                rightMotorFSpeed = 5
-                leftMotorBSpeed = 5
-                rightMotorBSpeed = 5
-            elif keypress == ord('a'):
-                leftMotorFSpeed = 2
-                rightMotorFSpeed = -2
-                leftMotorBSpeed = 2
-                rightMotorBSpeed = -2
-            elif keypress == ord('d'):
-                leftMotorFSpeed = -2
-                rightMotorFSpeed = 2
-                leftMotorBSpeed = -2
-                rightMotorBSpeed = 2
-            elif keypress == ord('1'):
-                L0Speed = 5
-            elif keypress == ord('2'):
-                L0Speed = 0
-            elif keypress == ord('3'):
-                L0Speed = -5
-            elif keypress == ord('4'):
-                L1Speed = -5
-            elif keypress == ord('5'):
-                L1Speed = 0
-            elif keypress == ord('6'):
-                L1Speed = 5
-            elif keypress == ord('7'):
-                L2Speed = -5
-            elif keypress == ord('8'):
-                L2Speed = 0
-            elif keypress == ord('9'):
-                L2Speed = 5
-            elif keypress == ord('i'):
-                L3Speed = -5
-            elif keypress == ord('o'):
-                L3Speed = 0
-            elif keypress == ord('p'):
-                L3Speed = 5
-            elif keypress == ord('j'):
-                F1Speed = -1
-                F2Speed = -1
-            elif keypress == ord('k'):
-                F1Speed = -0
-                F2Speed = -0
-            elif keypress == ord('l'):
-                F1Speed = 1
-                F2Speed = 1
-
-            elif keypress == ord('x'):
-                break
-
-            # Set actuators on mobile robot
-            sim.simxSetJointTargetVelocity(
-                clientID, L0, L0Speed, sim.simx_opmode_oneshot)
-            sim.simxSetJointTargetVelocity(
-                clientID, L1, L1Speed, sim.simx_opmode_oneshot)
-            sim.simxSetJointTargetVelocity(
-                clientID, L2, L2Speed, sim.simx_opmode_oneshot)
-            sim.simxSetJointTargetVelocity(
-                clientID, L3, L3Speed, sim.simx_opmode_oneshot)
-            sim.simxSetJointTargetVelocity(
-                clientID, F1, F1Speed, sim.simx_opmode_oneshot)
-            sim.simxSetJointTargetVelocity(
-                clientID, F2, F2Speed, sim.simx_opmode_oneshot)
 
             end_ms = int(round(time.time() * 1000))
             dt_ms = end_ms - start_ms
