@@ -9,6 +9,14 @@ import droneMain as drone
 import multiprocessing
 from enum import Enum, auto
 
+
+class RobotState(Enum):
+    TRAVELLING = auto()
+    SEARCHING = auto()
+    PICKING = auto()
+    RETURNING = auto()
+
+
 # Program Constants
 SIMULATION_STEP = 50.0  # in milliseconds
 
@@ -31,13 +39,7 @@ MrY = 2
 kernel = np.ones((5, 5), np.float32)/25
 position = 0
 path = []
-
-
-class RobotState(Enum):
-    TRAVELLING = auto()
-    SEARCHING = auto()
-    PICKING = auto()
-    RETURNING = auto()
+robot_state = RobotState.TRAVELLING
 
 
 def speedController(clientID, leftMotorF, rightMotorF, leftMotorB, rightMotorB, error):
@@ -72,6 +74,184 @@ def getOrientationError(clientID, body, target_orientation):
     out_min = -1.0
     out_max = 1.0
     return (orientation_error - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+
+
+def pickBear():
+    res, resolution, image = sim.simxGetVisionSensorImage(
+        clientID, camera, 0, sim.simx_opmode_buffer)
+    res, resolutionCar, imageCar = sim.simxGetVisionSensorImage(
+        clientID, cameraCar, 0, sim.simx_opmode_buffer)
+
+    # the position values are rounded to just the integer number
+
+    # Camera in Hand
+    original = np.array(image, dtype=np.uint8)
+    original.resize([resolution[0], resolution[1], 3])
+    original = cv2.flip(original, 0)
+    original = cv2.cvtColor(original, cv2.COLOR_RGB2BGR)
+    green = cv2.inRange(original, (0, 100, 0), (32, 255, 255))
+
+    # Camera in Car
+    originalCar = np.array(imageCar, dtype=np.uint8)
+    originalCar.resize([resolutionCar[0], resolutionCar[1], 3])
+    originalCar = cv2.flip(originalCar, 0)
+    originalCar = cv2.cvtColor(originalCar, cv2.COLOR_RGB2BGR)
+    greenCar = cv2.inRange(
+        originalCar, (0, 100, 0), (32, 255, 255))
+    position = sim.simxGetObjectPosition(
+        clientID, body, floor, sim.simx_opmode_oneshot)[1]
+    res, LD0 = sim.simxGetJointPosition(
+        clientID, L0, sim.simx_opmode_oneshot_wait)
+    res, LD1 = sim.simxGetJointPosition(
+        clientID, L1, sim.simx_opmode_oneshot_wait)
+    res, LD2 = sim.simxGetJointPosition(
+        clientID, L2, sim.simx_opmode_oneshot_wait)
+    res, i1, i2, i3, i4 = sim.simxReadProximitySensor(
+        clientID, distance, sim.simx_opmode_oneshot_wait)
+    res, c1, c2, c3, c4 = sim.simxReadProximitySensor(
+        clientID, distanceCar, sim.simx_opmode_oneshot_wait)
+    res, fd1, fd2, fd3, fd4 = sim.simxReadProximitySensor(
+        clientID, FrontDistance, sim.simx_opmode_oneshot_wait)
+    # Moments in the car
+    MCar = cv2.moments(greenCar)
+    if MCar["m00"] != 0:
+        cXCar = int(MCar["m10"] / MCar["m00"])
+        cYCar = int(MCar["m01"] / MCar["m00"])
+    else:
+        # If there are no green color a 0 will the value be
+        cXCar, cYCar = 0, 0
+    cv2.circle(greenCar, (cXCar, cYCar), 5, (100, 155, 155), -1)
+    # Moments in the hand
+    MHand = cv2.moments(green)
+    if MHand["m00"] != 0:
+        cXHand = int(MHand["m10"] / MHand["m00"])
+        cYHand = int(MHand["m01"] / MHand["m00"])
+    else:
+        # If there are no green color a 0 will the value be
+        cXHand, cYHand = 0, 0
+    cv2.circle(green, (cXHand, cYHand), 5, (100, 155, 155), -1)
+    ci2 = np.around(i2, 2)
+    cfd2 = np.around(fd2, 2)
+    # Robotic Arm Joints DOF adjusted to 90
+    cLD0 = LD0/.0166667
+    cLD1 = LD1/.0166667
+    cLD2 = LD2/.0166667
+    ccLD0 = np.around(cLD0, 1)
+    ccLD1 = np.around(cLD1, 1)
+    ccLD2 = np.around(cLD2, 1)
+    #    Set Arm to initial Position
+    if MrY == 0:
+        if ccLD1 < 155:
+            L1Speed = 0.5
+        else:
+            L1Speed = 0.0
+            MrY = 0.5
+    elif MrY == 0.5:
+        if ccLD1 > 0:
+            L1Speed = -0.2
+        else:
+            L1Speed == 0.0
+            MrY = 1
+    #   Fine adjustment looking for MrYork around the Manta
+    elif MrY == 1:
+        L0Speed = 0
+        L1Speed = 0
+        L2Speed = 0
+        # No MrY
+        if cXHand < 1:
+            leftMotorFSpeed = 1.5
+            rightMotorFSpeed = -1.5
+            leftMotorBSpeed = 1.5
+            rightMotorBSpeed = -1.5
+        # Centering momentum in X
+        elif 1 < cXHand < 105:
+            leftMotorFSpeed = 0.8
+            rightMotorFSpeed = -0.8
+            leftMotorBSpeed = 0.8
+            rightMotorBSpeed = -0.8
+        elif cXHand > 145:
+            leftMotorFSpeed = -0.8
+            rightMotorFSpeed = 0.8
+            leftMotorBSpeed = -0.8
+            rightMotorBSpeed = 0.8
+        # Centering momentun in Y
+        elif 1 < cYHand < 90:
+            position4 = (cYHand-155)
+            delta4 = 2*position4/100
+            leftMotorFSpeed = -(0.8-delta4)
+            rightMotorFSpeed = -(0.8-delta4)
+            leftMotorBSpeed = -(0.8-delta4)
+            rightMotorBSpeed = -(0.8-delta4)
+        elif cYHand > 135:
+            leftMotorFSpeed = 0.8
+            rightMotorFSpeed = 0.8
+            leftMotorBSpeed = 0.8
+            rightMotorBSpeed = 0.8
+        # The GroundRobot is ready to deploy
+        else:
+            leftMotorFSpeed = 0
+            rightMotorFSpeed = 0
+            leftMotorBSpeed = 0
+            rightMotorBSpeed = 0
+            MrY = 2
+    #   Deploying the arm towards MrYork
+    elif MrY == 2:
+        if (ccLD2 < 135):
+            L2Speed = 0.3
+        else:
+            L2Speed = 0
+        if ccLD0 > -90:
+            L0Speed = -0.2
+        else:
+            L0Speed = 0
+            MrY = 3
+    # Super Fine adjustment
+    elif MrY == 3:
+        L0Speed = 0
+        L1Speed = 0
+        L2Speed = 0
+    # Closing the fingers
+    elif MrY == 4:
+        L0Speed = 0
+        L1Speed = 0
+        L2Speed = 0
+        if(ccLD0 < -35 and ccLD2 > 40):
+            F1Speed = -0.5
+            F2Speed = -0.5
+            MrY = 4
+    #   Folding the arm back to the car with Mr York grabbed
+    elif (MrY == 4):
+        L0Speed = 0
+        L1Speed = 0
+        L2Speed = 0
+        F1Speed = -0.5
+        F2Speed = -0.5
+        if(ccLD0 < -15):
+            L0Speed = 0.3
+        if (ccLD1 < 170):
+            L1Speed = 0.3
+        if(ccLD2 > -10):
+            L2Speed = -0.1
+        else:
+            L0Speed = 0
+            L1Speed = 0
+            L2Speed = 0
+            MrY = 5
+    elif (MrY == 5):
+        L0Speed = 0
+        L1Speed = 0
+        L2Speed = 0
+        F1Speed = -0.5
+        F2Speed = -0.5
+        if (cXCar > 0.1 and cYCar > 0.1 and c1 == True):
+            print('GO', MrY)
+    print('Arm Joints Position', ccLD0, ccLD1, ccLD2)
+    # print("Proximity Sensor", ci2[2], c1)
+    print('MrY Stage', MrY, ci2[2])
+    print("M in Hand", cXHand, cYHand)
+    # print('Front Sensor:',cfd2[2])
+    cv2.imshow('View in Car', greenCar)
+    cv2.imshow('View in Hand', green)
 
 
 if __name__ == "__main__":
@@ -165,232 +345,20 @@ if __name__ == "__main__":
         while (sim.simxGetConnectionId(clientID) != -1):
             start_ms = int(round(time.time() * 1000))
 
-            getOrientationError(clientID, body, 3.1415)
-            speedController(clientID, leftMotorF, rightMotorF,
-                            leftMotorB, rightMotorB, 1.5)
-            if not path:  # If list is empty
+            if not path:  # If path list is empty, wait to get a response
                 path = drone_queue.get()
-            print(path)
+                print(path)
 
-            res, resolution, image = sim.simxGetVisionSensorImage(
-                clientID, camera, 0, sim.simx_opmode_buffer)
-            res, resolutionCar, imageCar = sim.simxGetVisionSensorImage(
-                clientID, cameraCar, 0, sim.simx_opmode_buffer)
-
-            # the position values are rounded to just the integer number
-
-            if res == sim.simx_return_ok:
-                # Camera in Hand
-                original = np.array(image, dtype=np.uint8)
-                original.resize([resolution[0], resolution[1], 3])
-                original = cv2.flip(original, 0)
-                original = cv2.cvtColor(original, cv2.COLOR_RGB2BGR)
-                green = cv2.inRange(original, (0, 100, 0), (32, 255, 255))
-                # Camera in Car
-                originalCar = np.array(imageCar, dtype=np.uint8)
-                originalCar.resize([resolutionCar[0], resolutionCar[1], 3])
-                originalCar = cv2.flip(originalCar, 0)
-                originalCar = cv2.cvtColor(originalCar, cv2.COLOR_RGB2BGR)
-                greenCar = cv2.inRange(
-                    originalCar, (0, 100, 0), (32, 255, 255))
-
-                position = sim.simxGetObjectPosition(
-                    clientID, body, floor, sim.simx_opmode_oneshot)[1]
-                res, LD0 = sim.simxGetJointPosition(
-                    clientID, L0, sim.simx_opmode_oneshot_wait)
-                res, LD1 = sim.simxGetJointPosition(
-                    clientID, L1, sim.simx_opmode_oneshot_wait)
-                res, LD2 = sim.simxGetJointPosition(
-                    clientID, L2, sim.simx_opmode_oneshot_wait)
-                res, i1, i2, i3, i4 = sim.simxReadProximitySensor(
-                    clientID, distance, sim.simx_opmode_oneshot_wait)
-                res, c1, c2, c3, c4 = sim.simxReadProximitySensor(
-                    clientID, distanceCar, sim.simx_opmode_oneshot_wait)
-                res, fd1, fd2, fd3, fd4 = sim.simxReadProximitySensor(
-                    clientID, FrontDistance, sim.simx_opmode_oneshot_wait)
-
-                # Moments in the car
-                MCar = cv2.moments(greenCar)
-                if MCar["m00"] != 0:
-                    cXCar = int(MCar["m10"] / MCar["m00"])
-                    cYCar = int(MCar["m01"] / MCar["m00"])
-                else:
-                    # If there are no green color a 0 will the value be
-                    cXCar, cYCar = 0, 0
-                cv2.circle(greenCar, (cXCar, cYCar), 5, (100, 155, 155), -1)
-
-                # Moments in the hand
-                MHand = cv2.moments(green)
-                if MHand["m00"] != 0:
-                    cXHand = int(MHand["m10"] / MHand["m00"])
-                    cYHand = int(MHand["m01"] / MHand["m00"])
-                else:
-                    # If there are no green color a 0 will the value be
-                    cXHand, cYHand = 0, 0
-
-                cv2.circle(green, (cXHand, cYHand), 5, (100, 155, 155), -1)
-                ci2 = np.around(i2, 2)
-                cfd2 = np.around(fd2, 2)
-
-                # Robotic Arm Joints DOF adjusted to 90
-                cLD0 = LD0/.0166667
-                cLD1 = LD1/.0166667
-                cLD2 = LD2/.0166667
-                ccLD0 = np.around(cLD0, 1)
-                ccLD1 = np.around(cLD1, 1)
-                ccLD2 = np.around(cLD2, 1)
-                #    Set Arm to initial Position
-                if MrY == 0:
-                    if ccLD1 < 155:
-                        L1Speed = 0.5
-                    else:
-                        L1Speed = 0.0
-                        MrY = 0.5
-                elif MrY == 0.5:
-                    if ccLD1 > 0:
-                        L1Speed = -0.2
-                    else:
-                        L1Speed == 0.0
-                        MrY = 1
-                #   Fine adjustment looking for MrYork around the Manta
-                elif MrY == 1:
-                    L0Speed = 0
-                    L1Speed = 0
-                    L2Speed = 0
-                    # No MrY
-                    if cXHand < 1:
-                        leftMotorFSpeed = 1.5
-                        rightMotorFSpeed = -1.5
-                        leftMotorBSpeed = 1.5
-                        rightMotorBSpeed = -1.5
-                    # Centering momentum in X
-                    elif 1 < cXHand < 105:
-                        leftMotorFSpeed = 0.8
-                        rightMotorFSpeed = -0.8
-                        leftMotorBSpeed = 0.8
-                        rightMotorBSpeed = -0.8
-                    elif cXHand > 145:
-                        leftMotorFSpeed = -0.8
-                        rightMotorFSpeed = 0.8
-                        leftMotorBSpeed = -0.8
-                        rightMotorBSpeed = 0.8
-                    # Centering momentun in Y
-                    elif 1 < cYHand < 90:
-                        position4 = (cYHand-155)
-                        delta4 = 2*position4/100
-                        leftMotorFSpeed = -(0.8-delta4)
-                        rightMotorFSpeed = -(0.8-delta4)
-                        leftMotorBSpeed = -(0.8-delta4)
-                        rightMotorBSpeed = -(0.8-delta4)
-                    elif cYHand > 135:
-                        leftMotorFSpeed = 0.8
-                        rightMotorFSpeed = 0.8
-                        leftMotorBSpeed = 0.8
-                        rightMotorBSpeed = 0.8
-                    # The GroundRobot is ready to deploy
-                    else:
-                        leftMotorFSpeed = 0
-                        rightMotorFSpeed = 0
-                        leftMotorBSpeed = 0
-                        rightMotorBSpeed = 0
-                        MrY = 2
-                #   Deploying the arm towards MrYork
-                elif MrY == 2:
-                    if (ccLD2 < 135):
-                        L2Speed = 0.3
-                    else:
-                        L2Speed = 0
-                    if ccLD0 > -90:
-                        L0Speed = -0.2
-                    else:
-                        L0Speed = 0
-                        MrY = 3
-                # Super Fine adjustment
-                elif MrY == 3:
-                    L0Speed = 0
-                    L1Speed = 0
-                    L2Speed = 0
-                # Closing the fingers
-                elif MrY == 4:
-                    L0Speed = 0
-                    L1Speed = 0
-                    L2Speed = 0
-                    if(ccLD0 < -35 and ccLD2 > 40):
-                        F1Speed = -0.5
-                        F2Speed = -0.5
-                        MrY = 4
-                #   Folding the arm back to the car with Mr York grabbed
-                elif (MrY == 4):
-                    L0Speed = 0
-                    L1Speed = 0
-                    L2Speed = 0
-                    F1Speed = -0.5
-                    F2Speed = -0.5
-                    if(ccLD0 < -15):
-                        L0Speed = 0.3
-                    if (ccLD1 < 170):
-                        L1Speed = 0.3
-                    if(ccLD2 > -10):
-                        L2Speed = -0.1
-                    else:
-                        L0Speed = 0
-                        L1Speed = 0
-                        L2Speed = 0
-                        MrY = 5
-                elif (MrY == 5):
-                    L0Speed = 0
-                    L1Speed = 0
-                    L2Speed = 0
-                    F1Speed = -0.5
-                    F2Speed = -0.5
-                    if (cXCar > 0.1 and cYCar > 0.1 and c1 == True):
-                        print('GO', MrY)
-
-                print('Arm Joints Position', ccLD0, ccLD1, ccLD2)
-                # print("Proximity Sensor", ci2[2], c1)
-                print('MrY Stage', MrY, ci2[2])
-                print("M in Hand", cXHand, cYHand)
-                # print('Front Sensor:',cfd2[2])
-
-                cv2.imshow('View in Car', greenCar)
-                cv2.imshow('View in Hand', green)
-            elif res == sim.simx_return_novalue_flag:
-                # Camera has not started or is not returning images
+            if (robot_state == RobotState.TRAVELLING):
+                getOrientationError(clientID, body, 3.1415)
+                speedController(clientID, leftMotorF, rightMotorF,
+                                leftMotorB, rightMotorB, 1.5)
+            elif(robot_state == RobotState.SEARCHING):
                 pass
-            else:
-                # Something else has happened
-                print("Unexpected error returned", res)
-
-            # Get wheel odometry directly from rotary joints in radians
-            leftWheelDiameter = \
-                sim.simxGetObjectFloatParameter(clientID, leftWheelF, 18, sim.simx_opmode_oneshot)[1] \
-                - sim.simxGetObjectFloatParameter(clientID,
-                                                  leftWheelF, 15, sim.simx_opmode_oneshot)[1]
-            rightWheelDiameter = \
-                sim.simxGetObjectFloatParameter(clientID, rightWheelF, 18, sim.simx_opmode_oneshot)[1] \
-                - sim.simxGetObjectFloatParameter(clientID,
-                                                  rightWheelF, 15, sim.simx_opmode_oneshot)[1]
-            leftWheelPosition = sim.simxGetJointPosition(
-                clientID, leftMotorF, sim.simx_opmode_oneshot)[1]
-            rightWheelPosition = sim.simxGetJointPosition(
-                clientID, rightMotorF, sim.simx_opmode_oneshot)[1]
-            # Deal with the joint singularity
-            dTheta = leftWheelPosition - lastLeftWheelPosition
-            if dTheta > np.pi:
-                dTheta -= 2*np.pi
-            elif dTheta < -np.pi:
-                dTheta += 2*np.pi
-            leftWheelOdom += dTheta * leftWheelDiameter / 2
-            lastLeftWheelPosition = leftWheelPosition
-            dTheta = rightWheelPosition - lastRightWheelPosition
-            if dTheta > np.pi:
-                dTheta -= 2*np.pi
-            elif dTheta < -np.pi:
-                dTheta += 2*np.pi
-            rightWheelOdom += dTheta * rightWheelDiameter / 2
-            lastRightWheelPosition = rightWheelPosition
-
-            # Place your Mobile Robot Control code here
+            elif(robot_state == RobotState.PICKING):
+                pickBear()
+            elif(robot_state == RobotState.RETURNING):
+                pass
 
             # Read keypresses for external control (note you must have the OpenCV image window selected when pressing keys!)
             # I left this because it is not really an obstacle
