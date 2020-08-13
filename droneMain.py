@@ -1,14 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Make sure to have the server side running in CoppeliaSim:
-# in a child script of a CoppeliaSim scene, add following command
-# to be executed just once, at simulation start:
-#
-# simRemoteApi.start(19999)
-#
-# then start simulation, and run this program.
-
 import sim
 import cv2
 import time
@@ -20,7 +12,8 @@ SCR_WIDTH = 512
 SCR_HEIGHT = 512
 SIMULATION_STEP = 50.0  # in milliseconds
 DRONE_GOAL_HEIGHT = 8.0
-ROBOT_RADIUS_PIXELS = 10  # Based on an image of 512x512
+# Based on an image of 512x512 it has a 37 pixel diameter. We use half (diameter/2), which is the radius
+ROBOT_RADIUS_PIXELS = 19
 
 # Processes the binary image to account for the size of the ground robot
 
@@ -32,7 +25,7 @@ def proccessToFinalMap(binary_map):
     for i in range(SCR_WIDTH):
         for j in range(SCR_HEIGHT):
             if (binary_map[i][j] == 255):
-                cv2.circle(final_map, (j, i), ROBOT_RADIUS_PIXELS, 255)
+                cv2.circle(final_map, (j, i), ROBOT_RADIUS_PIXELS, 255, -1)
     return final_map
 
 # Converts the pixel coordinates from the map to world coordinates for the robots
@@ -54,38 +47,51 @@ def worldToCameraCoord2D(current_pos, world_min, world_max, camera_min, camera_m
     return np.array([mapX, mapY])
 
 
-def calculateMoments(image):
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+def calculateMoments(image, mask):
+    filtered = cv2.bitwise_and(image, image, mask=mask)
+
+    gray_image = cv2.cvtColor(filtered, cv2.COLOR_BGR2GRAY)
+
+    # convert the grayscale image to binary image
+    thresh = cv2.threshold(gray_image, 0, 255, cv2.THRESH_BINARY)[1]
+
+    # calculate moments of binary image
+    return cv2.moments(thresh)
+
+
+def getTeddyPixelCentre(original):
+    hsv = cv2.cvtColor(original, cv2.COLOR_BGR2HSV)
+
+    teddy_mask = cv2.inRange(hsv, np.array(
+        [45, 254, 0]), np.array([64, 255, 255]))
+    M = calculateMoments(original, teddy_mask)
+
+    # calculate x,y coordinate of center
+    if (M["m00"] != 0):
+        cX = int(M["m10"] / M["m00"])
+        cY = int(M["m01"] / M["m00"])
+        return [cX, cY]
+    else:
+        return None
+
+
+def getCarPixelCentre(original):
+    hsv = cv2.cvtColor(original, cv2.COLOR_BGR2HSV)
 
     red_mask1 = cv2.inRange(hsv, np.array(
         [0, 100, 50]), np.array([10, 255, 255]))
     red_mask2 = cv2.inRange(hsv, np.array(
         [170, 100, 50]), np.array([180, 255, 255]))
     red_mask = red_mask1 | red_mask2
-
-    red_filtered = cv2.bitwise_and(image, image, mask=red_mask)
-
-    gray_image = cv2.cvtColor(red_filtered, cv2.COLOR_BGR2GRAY)
-
-    # convert the grayscale image to binary image
-    ret, thresh = cv2.threshold(gray_image, 0, 255, 0)
-
-    # calculate moments of binary image
-    return cv2.moments(thresh)
-
-
-def getCarPixelCentre(original):
-    M = calculateMoments(original)
+    M = calculateMoments(original, red_mask)
 
     # calculate x,y coordinate of center
     if (M["m00"] != 0):
         cX = int(M["m10"] / M["m00"])
         cY = int(M["m01"] / M["m00"])
+        return [cX, cY]
     else:
-        cX = -1
-        cY = -1
-    # car_world_location = cameraToWorldCoord2D([cX, cY], [0.0, 0.0], [SCR_WIDTH, SCR_HEIGHT], [-10.0, -10.0], [10.0, 10.0])
-    return [cX, cY]
+        return None
 
 
 def getFilteredMap(image):
@@ -97,7 +103,10 @@ def getFilteredMap(image):
     white_mask = cv2.inRange(hsv, np.array(
         [0, 0, 0]), np.array([0, 0, 255]))
 
-    mask = green_mask | white_mask
+    concrete_mask = cv2.inRange(hsv, np.array(
+        [15, 15, 185]), np.array([25, 64, 195]))
+
+    mask = concrete_mask | white_mask | green_mask
 
     filtered_image = cv2.bitwise_and(image, image, mask=mask)
 
@@ -107,7 +116,7 @@ def getFilteredMap(image):
 def getBinaryMap(image):
     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     gray_image = cv2.blur(gray_image, (2, 2))
-    return cv2.threshold(gray_image, 127, 255, cv2.THRESH_BINARY)[1]
+    return cv2.threshold(gray_image, 100, 255, cv2.THRESH_BINARY)[1]
 
 
 def moveToCentre(clientID, drone_target, drone_target_position):
@@ -223,8 +232,6 @@ def main(drone_queue):
             start_ms = int(round(time.time() * 1000))
 
             if (final_map.size != 0):
-                cv2.imshow("Pre-processed Map", binary_map)
-                cv2.imshow("Post-processed Map", final_map)
                 pass
             else:
                 # Elevate drone and start scanning movement
@@ -233,8 +240,9 @@ def main(drone_queue):
                         drone_target_position = moveToCentre(
                             clientID, drone_target, drone_target_position)
                     else:
-                        # Wait for 10 seconds to allow drone to stabilize
-                        time.sleep(10)
+                        # Wait for 20 seconds to allow drone to stabilize
+                        print("Wait 20s for drone to stabilize...")
+                        # time.sleep(20)
                         # Get the image from the camera
                         res, resolution, image = sim.simxGetVisionSensorImage(
                             clientID, drone_camera, 0, sim.simx_opmode_buffer)
@@ -250,32 +258,43 @@ def main(drone_queue):
                             original_image = cv2.cvtColor(
                                 original_image, cv2.COLOR_RGB2BGR)
 
-                            end_point = getCarPixelCentre(original_image)
+                            teddy_location = getTeddyPixelCentre(
+                                original_image)
+                            if (teddy_location != None):
+                                end_point = teddy_location
+                            else:
+                                red_car_location = getCarPixelCentre(
+                                    original_image)
+                                if (red_car_location != None):
+                                    end_point = red_car_location
 
                             filtered_map = getFilteredMap(original_image)
                             binary_map = getBinaryMap(filtered_map)
-                            cv2.imwrite("original_map.png", binary_map)
+                            cv2.imshow("Pre-processed Map", binary_map)
+
                             final_map = proccessToFinalMap(binary_map)
 
-                            end_point[1] += 20
-                            path = rapidlyExploringRandomTree(
-                                final_map, start_point, end_point)
+                            if (end_point[0] != None):
+                                end_point[1] += 20
+                                path = rapidlyExploringRandomTree(
+                                    final_map, start_point, end_point)
 
-                            drawn_map = np.copy(final_map)
-                            drawn_map = cv2.cvtColor(
-                                drawn_map, cv2.COLOR_GRAY2BGR)
-                            cv2.circle(drawn_map, tuple(
-                                start_point), 10, (255, 0, 0), -1)
-                            cv2.circle(drawn_map, tuple(
-                                end_point), 10, (0, 0, 255), -1)
+                                drawn_map = np.copy(final_map)
+                                drawn_map = cv2.cvtColor(
+                                    drawn_map, cv2.COLOR_GRAY2BGR)
+                                cv2.circle(drawn_map, tuple(
+                                    start_point), 10, (255, 0, 0), -1)
+                                cv2.circle(drawn_map, tuple(
+                                    end_point), 10, (0, 0, 255), -1)
 
-                            if (path is not None):
-                                for point in path:
-                                    cv2.circle(drawn_map, tuple(
-                                        point), 2, (0, 255, 0), -1)
-                                cv2.imshow("Drawn Map", drawn_map)
+                                if (path is not None):
+                                    for point in path:
+                                        cv2.circle(drawn_map, tuple(
+                                            point), 2, (0, 255, 0), -1)
+                                    cv2.imshow("Drawn Map", drawn_map)
+                                    # drone_queue.put(path)
                             else:
-                                print("No path found...")
+                                print("Could not get an end point...")
                 else:
                     drone_target_res, drone_target_position = sim.simxGetObjectPosition(
                         clientID, drone_target, -1, sim.simx_opmode_oneshot)
