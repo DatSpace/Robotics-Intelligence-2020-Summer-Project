@@ -23,8 +23,6 @@ SIMULATION_STEP = 50.0  # in milliseconds
 # Program Variables
 leftMotorFSpeed = 0.0
 rightMotorFSpeed = 0.0
-leftMotorBSpeed = 0.0
-rightMotorBSpeed = 0.0
 L0Speed = 0.0
 L1Speed = 0.0
 L2Speed = 0.0
@@ -35,7 +33,7 @@ leftWheelOdom = 0.0
 rightWheelOdom = 0.0
 lastLeftWheelPosition = 0.0
 lastRightWheelPosition = 0.0
-MrY = 2
+MrY = 200
 kernel = np.ones((5, 5), np.float32)/25
 position = 0
 path = []
@@ -55,10 +53,6 @@ def speedController(clientID, leftMotorF, rightMotorF, leftMotorB, rightMotorB, 
         clientID, leftMotorF, left_speed, sim.simx_opmode_oneshot)
     sim.simxSetJointTargetVelocity(
         clientID, rightMotorF, right_speed, sim.simx_opmode_oneshot)
-    sim.simxSetJointTargetVelocity(
-        clientID, leftMotorB, left_speed, sim.simx_opmode_oneshot)
-    sim.simxSetJointTargetVelocity(
-        clientID, rightMotorB, right_speed, sim.simx_opmode_oneshot)
 
 
 def getOrientationError(clientID, body, target_orientation):
@@ -161,38 +155,26 @@ def pickBear():
         if cXHand < 1:
             leftMotorFSpeed = 1.5
             rightMotorFSpeed = -1.5
-            leftMotorBSpeed = 1.5
-            rightMotorBSpeed = -1.5
         # Centering momentum in X
         elif 1 < cXHand < 105:
             leftMotorFSpeed = 0.8
             rightMotorFSpeed = -0.8
-            leftMotorBSpeed = 0.8
-            rightMotorBSpeed = -0.8
         elif cXHand > 145:
             leftMotorFSpeed = -0.8
             rightMotorFSpeed = 0.8
-            leftMotorBSpeed = -0.8
-            rightMotorBSpeed = 0.8
         # Centering momentun in Y
         elif 1 < cYHand < 90:
             position4 = (cYHand-155)
             delta4 = 2*position4/100
             leftMotorFSpeed = -(0.8-delta4)
             rightMotorFSpeed = -(0.8-delta4)
-            leftMotorBSpeed = -(0.8-delta4)
-            rightMotorBSpeed = -(0.8-delta4)
         elif cYHand > 135:
             leftMotorFSpeed = 0.8
             rightMotorFSpeed = 0.8
-            leftMotorBSpeed = 0.8
-            rightMotorBSpeed = 0.8
         # The GroundRobot is ready to deploy
         else:
             leftMotorFSpeed = 0
             rightMotorFSpeed = 0
-            leftMotorBSpeed = 0
-            rightMotorBSpeed = 0
             MrY = 2
     #   Deploying the arm towards MrYork
     elif MrY == 2:
@@ -311,21 +293,13 @@ if __name__ == "__main__":
         # Wheel drive motors
         res, leftMotorF = sim.simxGetObjectHandle(
             clientID, 'MotorA_FL', sim.simx_opmode_oneshot_wait)
-        res, leftMotorB = sim.simxGetObjectHandle(
-            clientID, 'MotorB_BL', sim.simx_opmode_oneshot_wait)
         res, rightMotorF = sim.simxGetObjectHandle(
             clientID, 'MotorA_FR', sim.simx_opmode_oneshot_wait)
-        res, rightMotorB = sim.simxGetObjectHandle(
-            clientID, 'MotorB_BR', sim.simx_opmode_oneshot_wait)
         # Wheels
         res, leftWheelF = sim.simxGetObjectHandle(
             clientID, 'WheelA_FL', sim.simx_opmode_oneshot_wait)
-        res, leftWheelB = sim.simxGetObjectHandle(
-            clientID, 'WheelB_BL', sim.simx_opmode_oneshot_wait)
         res, rightWheelF = sim.simxGetObjectHandle(
             clientID, 'WheelA_FR', sim.simx_opmode_oneshot_wait)
-        res, rightWheelB = sim.simxGetObjectHandle(
-            clientID, 'WheelB_BL', sim.simx_opmode_oneshot_wait)
         # RobotArm
         res, L0 = sim.simxGetObjectHandle(
             clientID, 'L0', sim.simx_opmode_oneshot_wait)
