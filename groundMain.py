@@ -38,11 +38,12 @@ kernel = np.ones((5, 5), np.float32)/25
 position = 0
 path = []
 robot_state = RobotState.TRAVELLING
+robot_path_index = 0
 
 
-def speedController(clientID, leftMotorF, rightMotorF, leftMotorB, rightMotorB, error):
-    gain = 2.0
-    default_speed = 2.0
+def speedController(clientID, leftMotorF, rightMotorF, error):
+    gain = 3.0
+    default_speed = -1.0
 
     delta = gain*error
 
@@ -62,7 +63,6 @@ def getOrientationError(clientID, body, target_orientation):
 
     orientation_error = orientation - target_orientation
 
-    # print(orientation)
     in_min = -np.pi
     in_max = np.pi
     out_min = -1.0
@@ -70,13 +70,19 @@ def getOrientationError(clientID, body, target_orientation):
     return (orientation_error - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
 
-def pickBear():
+def getTargetOrientation():
+    pass
+
+
+def updateRobotPathIndex():
+    pass
+
+
+def pickBear(clientID, camera, cameraCar, body, floor, L0, L1, L2, distance, distanceCar, FrontDistance):
     res, resolution, image = sim.simxGetVisionSensorImage(
         clientID, camera, 0, sim.simx_opmode_buffer)
     res, resolutionCar, imageCar = sim.simxGetVisionSensorImage(
         clientID, cameraCar, 0, sim.simx_opmode_buffer)
-
-    # the position values are rounded to just the integer number
 
     # Camera in Hand
     original = np.array(image, dtype=np.uint8)
@@ -260,7 +266,7 @@ if __name__ == "__main__":
         target=drone.main, args=(drone_queue,))
 
     # Starting drone process
-    # drone_process.start()
+    drone_process.start()
 
     # Start Program and just in case, close all opened connections
     print('Program started...')
@@ -337,16 +343,21 @@ if __name__ == "__main__":
 
             if not path:  # If path list is empty, wait to get a response
                 path = drone_queue.get()
-                print(path)
+
+            #robot_state = RobotState.PICKING
 
             if (robot_state == RobotState.TRAVELLING):
-                getOrientationError(clientID, body, 3.1415)
-                speedController(clientID, leftMotorF, rightMotorF,
-                                leftMotorB, rightMotorB, 1.5)
+                robot_path_index = updateRobotPathIndex()
+                target_orientation = getTargetOrientation()
+                orientation_error = getOrientationError(
+                    clientID, body, target_orientation)
+                speedController(clientID, leftMotorF,
+                                rightMotorF, orientation_error)
             elif(robot_state == RobotState.SEARCHING):
                 pass
             elif(robot_state == RobotState.PICKING):
-                pickBear()
+                pickBear(clientID, camera, cameraCar, body, floor, L0,
+                         L1, L2, distance, distanceCar, FrontDistance)
             elif(robot_state == RobotState.RETURNING):
                 pass
 
