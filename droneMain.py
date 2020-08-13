@@ -298,11 +298,14 @@ def main(drone_queue):
                                     end_point), 10, (0, 0, 255), -1)
 
                                 if (path is not None):
+                                    coppelia_path = []
                                     for point in path:
                                         cv2.circle(drawn_map, tuple(
                                             point), 2, (0, 255, 0), -1)
+                                        coppelia_path.append(cameraToWorldCoord2D(
+                                            [point[1], point[0]], [0, 0], [512, 512], [10, 10], [-10, -10]))  # Flip point because of current camera orientation and coppelia coordinate system
                                     cv2.imshow("Drawn Map", drawn_map)
-                                    # drone_queue.put(path)
+                                    drone_queue.put(coppelia_path)
                             else:
                                 print("Could not get an end point...")
                 else:
