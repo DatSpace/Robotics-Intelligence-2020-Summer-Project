@@ -26,10 +26,11 @@ def rapidlyExploringRandomTree(img, start, goal, seed=None):
     i = 0
     while (goal not in points) and (len(points) < MAX_NUM_VERT):
         if (i % 100) == 0:
-            print(i, 'points randomly generated...')
+            #print(i, 'points randomly generated...')
+            pass
 
         if (len(points) % hundreds) == 0:
-            print(len(points), 'vertices generated...')
+            #print(len(points), 'vertices generated...')
             hundreds = hundreds + 100
 
         while(occupied):
@@ -75,8 +76,8 @@ def rapidlyExploringRandomTree(img, start, goal, seed=None):
     else:
         path = None
         print('Reached maximum number of vertices and goal was not found...')
-        print('Total vertices in graph:', len(points))
-        print('Total random points generated:', i)
+        #print('Total vertices in graph:', len(points))
+        #print('Total random points generated:', i)
 
     return path
 
