@@ -242,7 +242,7 @@ def main(drone_queue):
                     else:
                         # Wait for 20 seconds to allow drone to stabilize
                         print("Wait 20s for drone to stabilize...")
-                        # time.sleep(20)
+                        time.sleep(20)
                         # Get the image from the camera
                         res, resolution, image = sim.simxGetVisionSensorImage(
                             clientID, drone_camera, 0, sim.simx_opmode_buffer)
@@ -276,8 +276,18 @@ def main(drone_queue):
 
                             if (end_point[0] != None):
                                 end_point[1] += 20
-                                path = rapidlyExploringRandomTree(
-                                    final_map, start_point, end_point)
+
+                                path = None
+                                min_points = 999999  # A huge number to have as maximum
+                                # Run 30 times the pathfinding and return the shortest
+                                for i in range(30):
+                                    temp_path = rapidlyExploringRandomTree(
+                                        final_map, start_point, end_point)
+                                    if temp_path is not None:
+                                        points = len(temp_path)
+                                        if (points < min_points):
+                                            path = temp_path
+                                            min_points = points
 
                                 drawn_map = np.copy(final_map)
                                 drawn_map = cv2.cvtColor(
