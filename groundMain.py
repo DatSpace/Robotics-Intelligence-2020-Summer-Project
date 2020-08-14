@@ -26,33 +26,24 @@ class ArmState(Enum):
 
 # Program Constants
 SIMULATION_STEP = 50.0  # in milliseconds
+PATH_POINT_ERROR_RADIUS = 0.5  # in coppelia units
+DEFAULT_SPEED = -1.0
+CONTROLLER_GAIN = 5.0
 
 # Program Variables
-leftMotorFSpeed = 0.0
-rightMotorFSpeed = 0.0
-L0Speed = 0.0
-L1Speed = 0.0
-L2Speed = 0.0
-L3Speed = 0.0
-F1Speed = 0.0
-F2Speed = 0.0
-leftWheelOdom = 0.0
-rightWheelOdom = 0.0
-lastLeftWheelPosition = 0.0
-lastRightWheelPosition = 0.0
-MrY = 200
-kernel = np.ones((5, 5), np.float32)/25
-position = 0
+leftMotorSpeed = 0.0
+rightMotorSpeed = 0.0
+
+L0Speed = L1Speed = L2Speed = L3Speed = 0.0
+F1Speed = F2Speed = 0.0
+
 path = []
 robot_state = RobotState.TRAVELLING
 arm_state = ArmState.RETRACT
 robot_path_index = 0
 
 
-def speedController(clientID, leftMotorF, rightMotorF, error):
-    gain = 5.0
-    default_speed = -1.0
-
+def speedController(clientID, leftMotor, rightMotor, gain, default_speed, error):
     delta = gain*error
 
     left_speed = default_speed - delta
@@ -112,6 +103,16 @@ def holdBear():
     F2Speed = -0.5
 
 
+def retractArm():
+    # Set Arm to initial Position
+    if arm_state == ArmState.RETRACT:
+        if ccLD1 < 155:
+            L1Speed = 1.0
+        else:
+            L1Speed = 0.0
+            arm_state = 0.5
+
+
 def searchBear(arm_state, robot_state):
     if (arm_state == ArmState.EXTENT):
         if ccLD1 > 90:
@@ -155,47 +156,27 @@ def searchBear(arm_state, robot_state):
     return arm_state, robot_state
 
 
-def pickBear(clientID, arm_state, camera, cameraCar, body, L0, L1, L2, distance, distanceCar, FrontDistance):
+def pickBear(clientID, arm_state, camera, cameraCar, body, link, distance, distanceCar, FrontDistance):
     res, resolution, image = sim.simxGetVisionSensorImage(
         clientID, camera, 0, sim.simx_opmode_buffer)
-    res, resolutionCar, imageCar = sim.simxGetVisionSensorImage(
-        clientID, cameraCar, 0, sim.simx_opmode_buffer)
 
     #Camera in Hand
     original = np.array(image, dtype=np.uint8)
     original.resize([resolution[0], resolution[1], 3])
     original = cv2.flip(original, 0)
     original = cv2.cvtColor(original, cv2.COLOR_RGB2BGR)
-    green = cv2.inRange(
-        original, (0, 100, 0), (32, 255, 255))
-    #Camera in Car
-    originalCar = np.array(imageCar, dtype=np.uint8)
-    originalCar.resize([resolutionCar[0], resolutionCar[1], 3])
-    originalCar = cv2.flip(originalCar, 0)
-    originalCar = cv2.cvtColor(originalCar, cv2.COLOR_RGB2BGR)
-    greenCar = cv2.inRange(originalCar, (0, 100, 0), (32, 255, 255))
+    green = cv2.inRange(original, (0, 100, 0), (32, 255, 255))
 
-    res, LD0 = sim.simxGetJointPosition(
-        clientID, L0, sim.simx_opmode_oneshot_wait)
-    res, LD1 = sim.simxGetJointPosition(
-        clientID, L1, sim.simx_opmode_oneshot_wait)
-    res, LD2 = sim.simxGetJointPosition(
-        clientID, L2, sim.simx_opmode_oneshot_wait)
+    L0Angle = sim.simxGetJointPosition(
+        clientID, link[0], sim.simx_opmode_oneshot_wait)[1]
+    L1Angle = sim.simxGetJointPosition(
+        clientID, link[1], sim.simx_opmode_oneshot_wait)[1]
+    L2Angle = sim.simxGetJointPosition(
+        clientID, link[2], sim.simx_opmode_oneshot_wait)[1]
+
     res, i1, i2, i3, i4 = sim.simxReadProximitySensor(
         clientID, distance, sim.simx_opmode_oneshot_wait)
-    res, c1, c2, c3, c4 = sim.simxReadProximitySensor(
-        clientID, distanceCar, sim.simx_opmode_oneshot_wait)
-    res, fd1, fd2, fd3, fd4 = sim.simxReadProximitySensor(
-        clientID, FrontDistance, sim.simx_opmode_oneshot_wait)
-    # Moments in the car
-    MCar = cv2.moments(greenCar)
-    if MCar["m00"] != 0:
-        cXCar = int(MCar["m10"] / MCar["m00"])
-        cYCar = int(MCar["m01"] / MCar["m00"])
-    else:
-        # If there are no green color a 0 will the value be
-        cXCar, cYCar = 0, 0
-    cv2.circle(greenCar, (cXCar, cYCar), 5, (100, 155, 155), -1)
+
     # Moments in the hand
     MHand = cv2.moments(green)
     if MHand["m00"] != 0:
@@ -204,23 +185,15 @@ def pickBear(clientID, arm_state, camera, cameraCar, body, L0, L1, L2, distance,
     else:
         # If there are no green color a 0 will the value be
         cXHand, cYHand = 0, 0
+
     cv2.circle(green, (cXHand, cYHand), 5, (100, 155, 155), -1)
-    ci2 = np.around(i2, 2)
-    cfd2 = np.around(fd2, 2)
+    ci2 = np.round(i2, 2)
+    cfd2 = np.round(fd2, 2)
+
     # Robotic Arm Joints DOF adjusted to 90
-    cLD0 = LD0/.0166667
-    cLD1 = LD1/.0166667
-    cLD2 = LD2/.0166667
-    ccLD0 = np.around(cLD0, 1)
-    ccLD1 = np.around(cLD1, 1)
-    ccLD2 = np.around(cLD2, 1)
-    #    Set Arm to initial Position
-    if arm_state == ArmState.RETRACT:
-        if ccLD1 < 155:
-            L1Speed = 1.0
-        else:
-            L1Speed = 0.0
-            MrY = 0.5
+    ccLD0 = np.round(np.rad2deg(LD0), 1)
+    ccLD1 = np.round(np.rad2deg(LD1), 1)
+    ccLD2 = np.round(np.rad2deg(LD2), 1)
 
     #   Deploying the arm towards MrYork
     if (arm_state=ArmState.GRAB):
@@ -338,8 +311,6 @@ if __name__ == "__main__":
             clientID, 'L1', sim.simx_opmode_oneshot_wait)[1])
         link.append(sim.simxGetObjectHandle(
             clientID, 'L2', sim.simx_opmode_oneshot_wait)[1])
-        link.append(sim.simxGetObjectHandle(
-            clientID, 'L3', sim.simx_opmode_oneshot_wait)[1])
 
         # Gripper
         finger1 = sim.simxGetObjectHandle(
@@ -351,12 +322,13 @@ if __name__ == "__main__":
         body = sim.simxGetObjectHandle(
             clientID, 'Robot', sim.simx_opmode_oneshot_wait)[1]
 
-        # Start main control loop
-        print('Starting control loop...')
+        # PROBABLY DONT NEED ANY OF VARIABLES
         res, resolution, image = sim.simxGetVisionSensorImage(
             clientID, camera, 0, sim.simx_opmode_streaming)
-        res, resolutionCar, imageCar = sim.simxGetVisionSensorImage(
-            clientID, cameraCar, 0, sim.simx_opmode_streaming)
+
+        # Start main control loop
+        print('Starting ground control loop...')
+
         # While connected to the simulator
         while (sim.simxGetConnectionId(clientID) != -1):
             start_ms = int(round(time.time() * 1000))
@@ -367,14 +339,14 @@ if __name__ == "__main__":
 
             if (robot_state == RobotState.TRAVELLING):
                 robot_path_index, current_point, next_point = updateRobotPathIndex(
-                    clientID, body, path, robot_path_index, 0.75)
+                    clientID, body, path, robot_path_index, PATH_POINT_ERROR_RADIUS)
                 if (next_point[0] != None):  # If we are not yet at the end point
                     target_orientation = getTargetOrientation(
                         current_point, next_point)
                     orientation_error = getOrientationError(
                         clientID, body, target_orientation)
-                    speedController(clientID, leftMotorF,
-                                    rightMotorF, orientation_error)
+                    speedController(clientID, leftMotor, rightMotor,
+                                    CONTROLLER_GAIN, DEFAULT_SPEED, orientation_error)
                 else:
                     robot_state = RobotState.SEARCHING
                     print("Reached destinattion...")
