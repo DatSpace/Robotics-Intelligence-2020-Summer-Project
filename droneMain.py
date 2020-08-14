@@ -12,8 +12,8 @@ SCR_WIDTH = 512
 SCR_HEIGHT = 512
 SIMULATION_STEP = 50.0  # in milliseconds
 DRONE_GOAL_HEIGHT = 8.0
-# Based on an image of 512x512 it has a 37 pixel diameter. We use half (diameter/2), which is the radius
-ROBOT_RADIUS_PIXELS = 19
+# Based on an image of 512x512 it has a 40 pixel diameter. We use half (diameter/2), which is the radius
+ROBOT_RADIUS_PIXELS = 20
 
 # Processes the binary image to account for the size of the ground robot
 
@@ -277,10 +277,11 @@ def main(drone_queue):
                             if (end_point[0] != None):
                                 end_point[1] += 20
 
+                                print("Starting shortest pathfinding attempts...")
                                 path = None
                                 min_points = 999999  # A huge number to have as maximum
-                                # Run 30 times the pathfinding and return the shortest
-                                for i in range(30):
+                                # Run 20 times the pathfinding and return the shortest
+                                for i in range(20):
                                     temp_path = rapidlyExploringRandomTree(
                                         final_map, start_point, end_point)
                                     if temp_path is not None:
@@ -305,6 +306,7 @@ def main(drone_queue):
                                         coppelia_path.append(cameraToWorldCoord2D(
                                             [point[1], point[0]], [0, 0], [512, 512], [10, 10], [-10, -10]))  # Flip point because of current camera orientation and coppelia coordinate system
                                     cv2.imshow("Drawn Map", drawn_map)
+                                    print("Sending path to Ground Robot...")
                                     drone_queue.put(coppelia_path)
                             else:
                                 print("Could not get an end point...")
