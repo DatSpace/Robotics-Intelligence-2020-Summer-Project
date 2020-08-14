@@ -42,7 +42,7 @@ robot_path_index = 0
 
 
 def speedController(clientID, leftMotorF, rightMotorF, error):
-    gain = 3.0
+    gain = 5.0
     default_speed = -1.0
 
     delta = gain*error
@@ -70,12 +70,30 @@ def getOrientationError(clientID, body, target_orientation):
     return (orientation_error - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
 
-def getTargetOrientation():
-    pass
+def getTargetOrientation(current_point, next_point):
+    #print("Target orientation is:", np.arctan2(next_point[1]-current_point[1], next_point[0]-current_point[0]))
+    # Angle of the two points in radians
+    return np.arctan2(next_point[1]-current_point[1], next_point[0]-current_point[0])
 
 
-def updateRobotPathIndex():
-    pass
+def updateRobotPathIndex(clientID, robot, path, robot_path_index, radius):
+    current_point = path[robot_path_index]
+
+    result, current_robot_location = sim.simxGetObjectPosition(
+        clientID, robot, -1, sim.simx_opmode_oneshot)
+    while (result != sim.simx_return_ok):
+        result, current_robot_location = sim.simxGetObjectPosition(
+            clientID, robot, -1, sim.simx_opmode_oneshot)
+
+    print("Index is:", robot_path_index)
+    print("Current is:", current_point)
+    print("Location is:", current_robot_location)
+    if (robot_path_index < len(path) - 1):
+        next_point = path[robot_path_index + 1]
+        if (np.sqrt(((next_point[0] - current_robot_location[0]) ** 2.0) + ((next_point[1] - current_robot_location[1]) ** 2.0)) < radius):
+            robot_path_index += 1
+        return robot_path_index, current_point, next_point
+    return robot_path_index, current_point, [None, None]
 
 
 def pickBear(clientID, camera, cameraCar, body, floor, L0, L1, L2, distance, distanceCar, FrontDistance):
@@ -343,16 +361,22 @@ if __name__ == "__main__":
 
             if not path:  # If path list is empty, wait to get a response
                 path = drone_queue.get()
-
-            #robot_state = RobotState.PICKING
+                print("Path received...")
 
             if (robot_state == RobotState.TRAVELLING):
-                robot_path_index = updateRobotPathIndex()
-                target_orientation = getTargetOrientation()
-                orientation_error = getOrientationError(
-                    clientID, body, target_orientation)
-                speedController(clientID, leftMotorF,
-                                rightMotorF, orientation_error)
+                robot_path_index, current_point, next_point = updateRobotPathIndex(
+                    clientID, body, path, robot_path_index, 0.75)
+                if (next_point[0] != None):  # If we are not yet at the end point
+                    target_orientation = getTargetOrientation(
+                        current_point, next_point)
+                    orientation_error = getOrientationError(
+                        clientID, body, target_orientation)
+                    speedController(clientID, leftMotorF,
+                                    rightMotorF, orientation_error)
+                else:
+                    robot_state = RobotState.SEARCHING
+                    print("Reached destinattion...")
+                    print("Searching...")
             elif(robot_state == RobotState.SEARCHING):
                 pass
             elif(robot_state == RobotState.PICKING):
@@ -378,7 +402,7 @@ if __name__ == "__main__":
     # Wait until both processes have finished
     drone_queue.close()
     drone_queue.join_thread()
-   # drone_process.join()
+    drone_process.join()
 
     # Both processes finished
     print('Simulation has ended...')
