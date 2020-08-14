@@ -3,7 +3,7 @@ import math
 
 MIN_NUM_VERT = 20  # Minimum number of vertex in the graph
 MAX_NUM_VERT = 1500  # Maximum number of vertex in the graph
-STEP_DISTANCE = 20  # Maximum distance between two vertex
+STEP_DISTANCE = 10  # Maximum distance between two vertex
 
 
 def rapidlyExploringRandomTree(img, start, goal, seed=None):
@@ -13,7 +13,7 @@ def rapidlyExploringRandomTree(img, start, goal, seed=None):
     graph = []
     points.append(start)
     graph.append((start, []))
-    print('Generating and connecting random points...')
+    #print('Generating and connecting random points...')
     occupied = True
     phaseTwo = False
 
@@ -55,7 +55,8 @@ def rapidlyExploringRandomTree(img, start, goal, seed=None):
 
         if len(points) >= MIN_NUM_VERT:
             if not phaseTwo:
-                print('Minimum vertices generated...')
+                pass
+                #print('Minimum vertices generated...')
             phaseTwo = True
 
         if phaseTwo:
@@ -75,7 +76,7 @@ def rapidlyExploringRandomTree(img, start, goal, seed=None):
         #print('The final path is made from:', len(path), 'connected points')
     else:
         path = None
-        print('Reached maximum number of vertices and goal was not found...')
+        #print('Reached maximum number of vertices and goal was not found...')
         #print('Total vertices in graph:', len(points))
         #print('Total random points generated:', i)
 
