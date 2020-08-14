@@ -17,6 +17,13 @@ class RobotState(Enum):
     RETURNING = auto()
 
 
+class ArmState(Enum):
+    RETRACT = auto()
+    EXTENT = auto()
+    GRAB = auto()
+    WAIT = auto()
+
+
 # Program Constants
 SIMULATION_STEP = 50.0  # in milliseconds
 
@@ -38,6 +45,7 @@ kernel = np.ones((5, 5), np.float32)/25
 position = 0
 path = []
 robot_state = RobotState.TRAVELLING
+arm_state = ArmState.RETRACT
 robot_path_index = 0
 
 
@@ -57,7 +65,7 @@ def speedController(clientID, leftMotorF, rightMotorF, error):
 
 
 def getOrientationError(clientID, body, target_orientation):
-    # Get the current euler angles for the orientation of the robot to the floor
+    # Get the current euler angles for the orientation of the robot
     orientation = (sim.simxGetObjectOrientation(
         clientID, body, -1, sim.simx_opmode_oneshot)[1])[2]
 
@@ -96,28 +104,77 @@ def updateRobotPathIndex(clientID, robot, path, robot_path_index, radius):
     return robot_path_index, current_point, [None, None]
 
 
-def pickBear(clientID, camera, cameraCar, body, floor, L0, L1, L2, distance, distanceCar, FrontDistance):
+def holdBear():
+    L0Speed = 0
+    L1Speed = 0
+    L2Speed = 0
+    F1Speed = -0.5
+    F2Speed = -0.5
+
+
+def searchBear(arm_state, robot_state):
+    if (arm_state == ArmState.EXTENT):
+        if ccLD1 > 90:
+            L1Speed = -0.5
+        elif 90 > ccLD1 > 0:
+            L1Speed = -0.1
+        else:
+            L1Speed == 0.0
+            arm_state = ArmState.WAIT
+    elif (arm_state == ArmState.WAIT):
+        #   Fine adjustment looking for MrYork around the Manta
+        L0Speed = 0
+        L1Speed = 0
+        L2Speed = 0
+        # No MrY
+        if cXHand < 1:
+            leftMotorFSpeed = 1.5
+            rightMotorFSpeed = -1.5
+        # Centering momentum in X
+        elif 1 < cXHand < 105:
+            leftMotorFSpeed = 0.4
+            rightMotorFSpeed = -0.4
+        elif cXHand > 145:
+            leftMotorFSpeed = -0.8
+            rightMotorFSpeed = 0.8
+        # Centering momentun in Y
+        elif 1 < cYHand < 65:
+            position4 = (cYHand-155)
+            delta4 = 2*position4/100
+            leftMotorFSpeed = -(0.8-delta4)
+            rightMotorFSpeed = -(0.8-delta4)
+        elif cYHand > 100:
+            leftMotorFSpeed = 0.8
+            rightMotorFSpeed = 0.8
+        # The GroundRobot is ready to deploy
+        else:
+            leftMotorFSpeed = 0
+            rightMotorFSpeed = 0
+            arm_state = ArmState.GRAB
+            robot_state = RobotState.PICKING
+    return arm_state, robot_state
+
+
+def pickBear(clientID, arm_state, camera, cameraCar, body, L0, L1, L2, distance, distanceCar, FrontDistance):
     res, resolution, image = sim.simxGetVisionSensorImage(
         clientID, camera, 0, sim.simx_opmode_buffer)
     res, resolutionCar, imageCar = sim.simxGetVisionSensorImage(
         clientID, cameraCar, 0, sim.simx_opmode_buffer)
 
-    # Camera in Hand
+    #Camera in Hand
     original = np.array(image, dtype=np.uint8)
     original.resize([resolution[0], resolution[1], 3])
     original = cv2.flip(original, 0)
     original = cv2.cvtColor(original, cv2.COLOR_RGB2BGR)
-    green = cv2.inRange(original, (0, 100, 0), (32, 255, 255))
-
-    # Camera in Car
+    green = cv2.inRange(
+        original, (0, 100, 0), (32, 255, 255))
+    #Camera in Car
     originalCar = np.array(imageCar, dtype=np.uint8)
     originalCar.resize([resolutionCar[0], resolutionCar[1], 3])
     originalCar = cv2.flip(originalCar, 0)
     originalCar = cv2.cvtColor(originalCar, cv2.COLOR_RGB2BGR)
-    greenCar = cv2.inRange(
-        originalCar, (0, 100, 0), (32, 255, 255))
-    position = sim.simxGetObjectPosition(
-        clientID, body, floor, sim.simx_opmode_oneshot)[1]
+    greenCar = cv2.inRange(originalCar, (0, 100, 0), (32, 255, 255))
+
     res, LD0 = sim.simxGetJointPosition(
         clientID, L0, sim.simx_opmode_oneshot_wait)
     res, LD1 = sim.simxGetJointPosition(
@@ -158,81 +215,52 @@ def pickBear(clientID, camera, cameraCar, body, floor, L0, L1, L2, distance, dis
     ccLD1 = np.around(cLD1, 1)
     ccLD2 = np.around(cLD2, 1)
     #    Set Arm to initial Position
-    if MrY == 0:
+    if arm_state == ArmState.RETRACT:
         if ccLD1 < 155:
-            L1Speed = 0.5
+            L1Speed = 1.0
         else:
             L1Speed = 0.0
             MrY = 0.5
-    elif MrY == 0.5:
-        if ccLD1 > 0:
-            L1Speed = -0.2
-        else:
-            L1Speed == 0.0
-            MrY = 1
-    #   Fine adjustment looking for MrYork around the Manta
-    elif MrY == 1:
-        L0Speed = 0
-        L1Speed = 0
-        L2Speed = 0
-        # No MrY
-        if cXHand < 1:
-            leftMotorFSpeed = 1.5
-            rightMotorFSpeed = -1.5
-        # Centering momentum in X
-        elif 1 < cXHand < 105:
-            leftMotorFSpeed = 0.8
-            rightMotorFSpeed = -0.8
-        elif cXHand > 145:
-            leftMotorFSpeed = -0.8
-            rightMotorFSpeed = 0.8
-        # Centering momentun in Y
-        elif 1 < cYHand < 90:
-            position4 = (cYHand-155)
-            delta4 = 2*position4/100
-            leftMotorFSpeed = -(0.8-delta4)
-            rightMotorFSpeed = -(0.8-delta4)
-        elif cYHand > 135:
-            leftMotorFSpeed = 0.8
-            rightMotorFSpeed = 0.8
-        # The GroundRobot is ready to deploy
-        else:
-            leftMotorFSpeed = 0
-            rightMotorFSpeed = 0
-            MrY = 2
+
     #   Deploying the arm towards MrYork
-    elif MrY == 2:
-        if (ccLD2 < 135):
-            L2Speed = 0.3
+    if (arm_state=ArmState.GRAB):
+        if (ccLD2 < 125):
+            L2Speed = 0.2
         else:
             L2Speed = 0
-        if ccLD0 > -90:
-            L0Speed = -0.2
+        if ccLD0 > -83:
+            L0Speed = -0.07
         else:
+            # Super Fine adjustment to center
             L0Speed = 0
-            MrY = 3
-    # Super Fine adjustment
-    elif MrY == 3:
-        L0Speed = 0
-        L1Speed = 0
-        L2Speed = 0
-    # Closing the fingers
-    elif MrY == 4:
-        L0Speed = 0
-        L1Speed = 0
-        L2Speed = 0
-        if(ccLD0 < -35 and ccLD2 > 40):
-            F1Speed = -0.5
-            F2Speed = -0.5
-            MrY = 4
+            L1Speed = 0
+            L2Speed = 0
+            if 1 < cXHand < 95:
+                leftMotorFSpeed = 0.1
+                rightMotorFSpeed = -0.1
+            elif cXHand > 165:
+                leftMotorFSpeed = -0.1
+                rightMotorFSpeed = 0.1
+            else:
+                # Super Fine adjustment to reach MrY
+                leftMotorFSpeed = 0.0
+                rightMotorFSpeed = 0.0
+                if (i1 == True and ci2[2] > 0.03):
+                    leftMotorFSpeed = -0.08
+                    rightMotorFSpeed = -0.08
+                else:
+                    if(ccLD0 < -35 and ccLD2 > 40):
+                        F1Speed = -0.5
+                        F2Speed = -0.5
+                        arm_state = ArmState.RETRACT
     #   Folding the arm back to the car with Mr York grabbed
-    elif (MrY == 4):
+    elif (arm_state == ArmState.RETRACT):
         L0Speed = 0
         L1Speed = 0
         L2Speed = 0
         F1Speed = -0.5
         F2Speed = -0.5
-        if(ccLD0 < -15):
+        if(ccLD0 < -25):
             L0Speed = 0.3
         if (ccLD1 < 170):
             L1Speed = 0.3
@@ -242,21 +270,9 @@ def pickBear(clientID, camera, cameraCar, body, floor, L0, L1, L2, distance, dis
             L0Speed = 0
             L1Speed = 0
             L2Speed = 0
-            MrY = 5
-    elif (MrY == 5):
-        L0Speed = 0
-        L1Speed = 0
-        L2Speed = 0
-        F1Speed = -0.5
-        F2Speed = -0.5
-        if (cXCar > 0.1 and cYCar > 0.1 and c1 == True):
-            print('GO', MrY)
-    print('Arm Joints Position', ccLD0, ccLD1, ccLD2)
-    # print("Proximity Sensor", ci2[2], c1)
-    print('MrY Stage', MrY, ci2[2])
-    print("M in Hand", cXHand, cYHand)
-    # print('Front Sensor:',cfd2[2])
-    cv2.imshow('View in Car', greenCar)
+            arm_state = ArmState.WAIT
+            robot_state = RobotState.RETURNING
+
     cv2.imshow('View in Hand', green)
 
     # Set actuators on mobile robot
@@ -274,6 +290,7 @@ def pickBear(clientID, camera, cameraCar, body, floor, L0, L1, L2, distance, dis
         clientID, F2, F2Speed, sim.simx_opmode_oneshot)
 
     cv2.waitKey(1)
+    return arm_state, robot_state
 
 
 if __name__ == "__main__":
@@ -297,57 +314,42 @@ if __name__ == "__main__":
     # Connect to the simulation
     if clientID != -1:
         print('Connected to remote API server...')
-        print('Obtaining handles of simulation objects...')
 
         # Get handles to simulation objects
         print('Obtaining handles of simulation objects')
+
         # Vision and proximity sensors in Hand
-        res, camera = sim.simxGetObjectHandle(
-            clientID, 'Camera', sim.simx_opmode_oneshot_wait)
-        res, distance = sim.simxGetObjectHandle(
-            clientID, 'Proximity', sim.simx_opmode_oneshot_wait)
-        # Vision and proximity sensors in car
-        res, cameraCar = sim.simxGetObjectHandle(
-            clientID, 'CameraCar', sim.simx_opmode_oneshot_wait)
-        res, distanceCar = sim.simxGetObjectHandle(
-            clientID, 'InPlace', sim.simx_opmode_oneshot_wait)
-        res, FrontDistance = sim.simxGetObjectHandle(
-            clientID, 'FrontSensor', sim.simx_opmode_oneshot_wait)
-        # res,ForceHand = sim.simxGetObjectHandle(clientID, 'Force', sim.simx_opmode_oneshot_wait)
+        camera = sim.simxGetObjectHandle(
+            clientID, 'Camera', sim.simx_opmode_oneshot_wait)[1]
+        distance = sim.simxGetObjectHandle(
+            clientID, 'Proximity', sim.simx_opmode_oneshot_wait)[1]
+
         # Wheel drive motors
-        res, leftMotorF = sim.simxGetObjectHandle(
-            clientID, 'MotorA_FL', sim.simx_opmode_oneshot_wait)
-        res, rightMotorF = sim.simxGetObjectHandle(
-            clientID, 'MotorA_FR', sim.simx_opmode_oneshot_wait)
-        # Wheels
-        res, leftWheelF = sim.simxGetObjectHandle(
-            clientID, 'WheelA_FL', sim.simx_opmode_oneshot_wait)
-        res, rightWheelF = sim.simxGetObjectHandle(
-            clientID, 'WheelA_FR', sim.simx_opmode_oneshot_wait)
+        leftMotor = sim.simxGetObjectHandle(
+            clientID, 'MotorA_FL', sim.simx_opmode_oneshot_wait)[1]
+        rightMotor = sim.simxGetObjectHandle(
+            clientID, 'MotorA_FR', sim.simx_opmode_oneshot_wait)[1]
+
         # RobotArm
-        res, L0 = sim.simxGetObjectHandle(
-            clientID, 'L0', sim.simx_opmode_oneshot_wait)
-        res, L1 = sim.simxGetObjectHandle(
-            clientID, 'L1', sim.simx_opmode_oneshot_wait)
-        res, L2 = sim.simxGetObjectHandle(
-            clientID, 'L2', sim.simx_opmode_oneshot_wait)
-        res, L3 = sim.simxGetObjectHandle(
-            clientID, 'L3', sim.simx_opmode_oneshot_wait)
+        link = []
+        link.append(sim.simxGetObjectHandle(
+            clientID, 'L0', sim.simx_opmode_oneshot_wait)[1])
+        link.append(sim.simxGetObjectHandle(
+            clientID, 'L1', sim.simx_opmode_oneshot_wait)[1])
+        link.append(sim.simxGetObjectHandle(
+            clientID, 'L2', sim.simx_opmode_oneshot_wait)[1])
+        link.append(sim.simxGetObjectHandle(
+            clientID, 'L3', sim.simx_opmode_oneshot_wait)[1])
+
         # Gripper
-        res, F1 = sim.simxGetObjectHandle(
-            clientID, 'Barrett_openCloseJoint0', sim.simx_opmode_oneshot_wait)
-        if res != sim.simx_return_ok:
-            print('Could not get handle to F1')
-        res, F2 = sim.simxGetObjectHandle(
-            clientID, 'Barrett_openCloseJoint', sim.simx_opmode_oneshot_wait)
-        if res != sim.simx_return_ok:
-            print('Could not get handle to F2')
-        # Body
-        res, body = sim.simxGetObjectHandle(
-            clientID, 'Robot', sim.simx_opmode_oneshot_wait)
-        # Floor
-        res, floor = sim.simxGetObjectHandle(
-            clientID, 'ResizableFloor_5_25', sim.simx_opmode_oneshot_wait)
+        finger1 = sim.simxGetObjectHandle(
+            clientID, 'Barrett_openCloseJoint0', sim.simx_opmode_oneshot_wait)[1]
+        finger2 = sim.simxGetObjectHandle(
+            clientID, 'Barrett_openCloseJoint', sim.simx_opmode_oneshot_wait)[1]
+
+        # Robot
+        body = sim.simxGetObjectHandle(
+            clientID, 'Robot', sim.simx_opmode_oneshot_wait)[1]
 
         # Start main control loop
         print('Starting control loop...')
@@ -378,12 +380,12 @@ if __name__ == "__main__":
                     print("Reached destinattion...")
                     print("Searching...")
             elif(robot_state == RobotState.SEARCHING):
-                pass
+                arm_state, robot_state = searchBear(arm_state, robot_state)
             elif(robot_state == RobotState.PICKING):
-                pickBear(clientID, camera, cameraCar, body, floor, L0,
-                         L1, L2, distance, distanceCar, FrontDistance)
+                arm_state, robot_state = pickBear(
+                    clientID, arm_state, robot_state, camera, cameraCar, body, L0, L1, L2, distance, distanceCar, FrontDistance)
             elif(robot_state == RobotState.RETURNING):
-                pass
+                print("I MADE IT !!! I AM RETURNING")
 
             end_ms = int(round(time.time() * 1000))
             dt_ms = end_ms - start_ms
