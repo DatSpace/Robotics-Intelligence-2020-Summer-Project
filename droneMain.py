@@ -31,20 +31,12 @@ def proccessToFinalMap(binary_map):
 # Converts the pixel coordinates from the map to world coordinates for the robots
 
 
-def cameraToWorldCoord2D(current_pos, camera_min, camera_max, world_min, world_max):
-    mapX = (current_pos[0] - camera_min[0]) * (world_max[0] -
-                                               world_min[0]) / (camera_max[0] - camera_min[0]) + world_min[0]
-    mapY = (current_pos[1] - camera_min[1]) * (world_max[1] -
-                                               world_min[1]) / (camera_max[1] - camera_min[1]) + world_min[1]
-    return np.array([mapX, mapY])
-
-
-def worldToCameraCoord2D(current_pos, world_min, world_max, camera_min, camera_max):
-    mapX = int((current_pos[0] - world_min[0]) * (camera_max[0] -
-                                                  camera_min[0]) / (world_max[0] - world_min[0]) + camera_min[0])
-    mapY = int((current_pos[1] - world_min[1]) * (camera_max[1] -
-                                                  camera_min[1]) / (world_max[1] - world_min[1]) + camera_min[1])
-    return np.array([mapX, mapY])
+def changePointScale(point, in_min, in_max, out_min, out_max):
+    newX = (point[0] - in_min[0]) * (out_max[0] - out_min[0]) / \
+        (in_max[0] - in_min[0]) + out_min[0]
+    newY = (point[1] - in_min[1]) * (out_max[1] - out_min[1]) / \
+        (in_max[1] - in_min[1]) + out_min[1]
+    return np.array([newX, newY])
 
 
 def calculateMoments(image, mask):
@@ -302,7 +294,7 @@ def main(drone_queue):
                                     for point in path:
                                         cv2.circle(drawn_map, tuple(
                                             point), 2, (0, 255, 0), -1)
-                                        coppelia_path.append(cameraToWorldCoord2D(
+                                        coppelia_path.append(changePointScale(
                                             [point[1], point[0]], [0, 0], [512, 512], [10, 10], [-10, -10]))  # Flip point because of current camera orientation and coppelia coordinate system
                                     cv2.imshow("Pre-processed Map", binary_map)
                                     cv2.imshow("Drawn Map", drawn_map)
@@ -315,7 +307,7 @@ def main(drone_queue):
                 else:
                     drone_target_res, drone_target_position = sim.simxGetObjectPosition(
                         clientID, drone_target, -1, sim.simx_opmode_oneshot)
-                    start_point = worldToCameraCoord2D([drone_target_position[0], drone_target_position[1]], [
+                    start_point = changePointScale([drone_target_position[0], drone_target_position[1]], [
                         10.0, 10.0], [-10.0, -10.0], [0.0, 0.0], [SCR_WIDTH, SCR_HEIGHT]).tolist()
 
             key = cv2.waitKey(1) & 0xFF
