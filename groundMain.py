@@ -335,7 +335,7 @@ if __name__ == "__main__":
                     leftMotorSpeed, rightMotorSpeed = speedController(
                         clientID, leftMotorSpeed, rightMotorSpeed, CONTROLLER_GAIN, DEFAULT_SPEED, orientation_error)
                 else:
-                    robot_state = RobotState.SEARCHING
+                    robot_state = RobotState.RESCUE
                     print("Reached destinattion...")
                     print("Searching...")
             elif(robot_state == RobotState.RESCUE):
@@ -348,17 +348,19 @@ if __name__ == "__main__":
                 clientID, leftMotor, leftMotorSpeed, sim.simx_opmode_oneshot)
             sim.simxSetJointTargetVelocity(
                 clientID, rightMotor, rightMotorSpeed, sim.simx_opmode_oneshot)
-            # Set actuators on mobile robot
-            sim.simxSetJointTargetVelocity(
-                clientID, link[0], L0Speed, sim.simx_opmode_oneshot)
-            sim.simxSetJointTargetVelocity(
-                clientID, link[1], L1Speed, sim.simx_opmode_oneshot)
-            sim.simxSetJointTargetVelocity(
-                clientID, link[2], L2Speed, sim.simx_opmode_oneshot)
-            sim.simxSetJointTargetVelocity(
-                clientID, finger1, F1Speed, sim.simx_opmode_oneshot)
-            sim.simxSetJointTargetVelocity(
-                clientID, finger2, F2Speed, sim.simx_opmode_oneshot)
+
+            if (robot_state == RobotState.RESCUE):
+                # Set actuators on mobile robot only when needed
+                sim.simxSetJointTargetVelocity(
+                    clientID, link[0], L0Speed, sim.simx_opmode_oneshot)
+                sim.simxSetJointTargetVelocity(
+                    clientID, link[1], L1Speed, sim.simx_opmode_oneshot)
+                sim.simxSetJointTargetVelocity(
+                    clientID, link[2], L2Speed, sim.simx_opmode_oneshot)
+                sim.simxSetJointTargetVelocity(
+                    clientID, finger1, F1Speed, sim.simx_opmode_oneshot)
+                sim.simxSetJointTargetVelocity(
+                    clientID, finger2, F2Speed, sim.simx_opmode_oneshot)
 
             end_ms = int(round(time.time() * 1000))
             dt_ms = end_ms - start_ms
