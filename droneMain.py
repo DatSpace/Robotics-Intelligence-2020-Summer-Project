@@ -270,7 +270,6 @@ def main(drone_queue):
 
                             filtered_map = getFilteredMap(original_image)
                             binary_map = getBinaryMap(filtered_map)
-                            cv2.imshow("Pre-processed Map", binary_map)
 
                             final_map = proccessToFinalMap(binary_map)
 
@@ -305,9 +304,12 @@ def main(drone_queue):
                                             point), 2, (0, 255, 0), -1)
                                         coppelia_path.append(cameraToWorldCoord2D(
                                             [point[1], point[0]], [0, 0], [512, 512], [10, 10], [-10, -10]))  # Flip point because of current camera orientation and coppelia coordinate system
+                                    cv2.imshow("Pre-processed Map", binary_map)
                                     cv2.imshow("Drawn Map", drawn_map)
                                     print("Sending path to Ground Robot...")
                                     drone_queue.put(coppelia_path)
+                                else:
+                                    print("No path found...")
                             else:
                                 print("Could not get an end point...")
                 else:

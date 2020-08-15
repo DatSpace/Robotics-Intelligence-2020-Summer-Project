@@ -12,16 +12,15 @@ from enum import Enum, auto
 
 class RobotState(Enum):
     TRAVELLING = auto()
-    SEARCHING = auto()
-    PICKING = auto()
+    RESCUE = auto()
     RETURNING = auto()
 
 
 class ArmState(Enum):
-    RETRACT = auto()
     EXTENT = auto()
+    SEARCH = auto()
     GRAB = auto()
-    WAIT = auto()
+    RETRACT = auto()
 
 
 # Program Constants
@@ -38,8 +37,8 @@ L0Speed = L1Speed = L2Speed = L3Speed = 0.0
 F1Speed = F2Speed = 0.0
 
 path = []
-robot_state = RobotState.TRAVELLING
-arm_state = ArmState.RETRACT
+robot_state = RobotState.RESCUE
+arm_state = ArmState.EXTENT
 robot_path_index = 0
 
 
@@ -137,16 +136,17 @@ def retractArm(clientID, link):
         clientID, link[1], L1Speed, sim.simx_opmode_oneshot)
 
     # Set Arm to initial Position
-    L1Angle = getLinksAnglesDegrees(clientID, link)
+    L1Angle = getLinksAnglesDegrees(clientID, link)[1]
     while (L1Angle < 155):
-        L1Angle = getLinksAnglesDegrees(clientID, link)
+        L1Angle = getLinksAnglesDegrees(clientID, link)[1]
 
     L1Speed = 0.0
     sim.simxSetJointTargetVelocity(
         clientID, link[1], L1Speed, sim.simx_opmode_oneshot)
+    print("Arm retracted...")
 
 
-def searchBear(clientID, link, arm_state, robot_state, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed):
+def rescueBear(clientID, link, arm_state, robot_state, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed, F1Speed, F2Speed):
     if (arm_state == ArmState.EXTENT):
         L1Angle = getLinksAnglesDegrees(clientID, link)[1]
         if L1Angle > 90:
@@ -155,8 +155,8 @@ def searchBear(clientID, link, arm_state, robot_state, leftMotorSpeed, rightMoto
             L1Speed = -0.1
         else:
             L1Speed == 0.0
-            arm_state = ArmState.WAIT
-    elif (arm_state == ArmState.WAIT):
+            arm_state = ArmState.SEARCH
+    elif (arm_state == ArmState.SEARCH):
         #   Fine adjustment looking for MrYork around the Manta
         L0Speed = 0
         L1Speed = 0
@@ -185,21 +185,16 @@ def searchBear(clientID, link, arm_state, robot_state, leftMotorSpeed, rightMoto
         # The GroundRobot is ready to deploy
         else:
             leftMotorSpeed = 0
-            rightMotorFSpeed = 0
+            rightMotorSpeed = 0
             arm_state = ArmState.GRAB
-            robot_state = RobotState.PICKING
-    return arm_state, robot_state, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed
+    elif (arm_state == ArmState.GRAB):  # Deploying the arm towards MrYork
+        L0Angle, L1Angle, L2Angle = getLinksAnglesDegrees(clientID, link)
 
-
-def pickBear(clientID, arm_state, robot_state, camera, body, link, distance, F1, F2, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed, F1Speed, F2Speed):
-    L0Angle, L1Angle, L2Angle = getLinksAnglesDegrees(clientID, link)
-
-    #   Deploying the arm towards MrYork
-    if (arm_state == ArmState.GRAB):
         if (L2Angle < 125):
             L2Speed = 0.2
         else:
             L2Speed = 0
+
         if L0Angle > -83:
             L0Speed = -0.07
         else:
@@ -233,11 +228,13 @@ def pickBear(clientID, arm_state, robot_state, camera, body, link, distance, F1,
                         arm_state = ArmState.RETRACT
     #   Folding the arm back to the car with Mr York grabbed
     elif (arm_state == ArmState.RETRACT):
+        L0Angle, L1Angle, L2Angle = getLinksAnglesDegrees(clientID, link)
         L0Speed = 0
         L1Speed = 0
         L2Speed = 0
         F1Speed = -0.5
         F2Speed = -0.5
+
         if(L0Angle < -25):
             L0Speed = 0.3
         if (L1Angle < 170):
@@ -248,8 +245,8 @@ def pickBear(clientID, arm_state, robot_state, camera, body, link, distance, F1,
             L0Speed = 0
             L1Speed = 0
             L2Speed = 0
-            arm_state = ArmState.WAIT
             robot_state = RobotState.RETURNING
+
     return arm_state, robot_state, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed, F1Speed, F2Speed
 
 
@@ -261,7 +258,7 @@ if __name__ == "__main__":
         target=drone.main, args=(drone_queue,))
 
     # Starting drone process
-    drone_process.start()
+    # drone_process.start()
 
     # Start Program and just in case, close all opened connections
     print('Program started...')
@@ -315,16 +312,17 @@ if __name__ == "__main__":
 
         # Start main control loop
         print('Starting ground control loop...')
+        test = True
 
         # While connected to the simulator
         while (sim.simxGetConnectionId(clientID) != -1):
             start_ms = int(round(time.time() * 1000))
 
-            if not path:  # If path list is empty, wait to get a response
-                path = drone_queue.get()
+            if test:  # not path:  # If path list is empty, wait to get a response
+                #path = drone_queue.get()
+                test = False
                 print("Path received...")
-
-            retractArm(clientID, link)
+                retractArm(clientID, link)
 
             if (robot_state == RobotState.TRAVELLING):
                 robot_path_index, current_point, next_point = updateRobotPathIndex(
@@ -335,17 +333,14 @@ if __name__ == "__main__":
                     orientation_error = getOrientationError(
                         clientID, body, target_orientation)
                     leftMotorSpeed, rightMotorSpeed = speedController(
-                        clientID leftMotorSpeed, rightMotorSpeed, CONTROLLER_GAIN, DEFAULT_SPEED, orientation_error)
+                        clientID, leftMotorSpeed, rightMotorSpeed, CONTROLLER_GAIN, DEFAULT_SPEED, orientation_error)
                 else:
                     robot_state = RobotState.SEARCHING
                     print("Reached destinattion...")
                     print("Searching...")
-            elif(robot_state == RobotState.SEARCHING):
-                arm_state, robot_state, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed = searchBear(
-                    clientID, link, arm_state, robot_state, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed)
-            elif(robot_state == RobotState.PICKING):
-                arm_state, robot_state, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed, F1Speed, F2Speed = pickBear(
-                    clientID, arm_state, robot_state, camera, body, link, distance, F1, F2, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed, F1Speed, F2Speed)
+            elif(robot_state == RobotState.RESCUE):
+                arm_state, robot_state, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed, F1Speed, F2Speed = rescueBear(
+                    clientID, link, arm_state, robot_state, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed, F1Speed, F2Speed)
             elif(robot_state == RobotState.RETURNING):
                 print("I MADE IT !!! I AM RETURNING")
 
@@ -361,9 +356,9 @@ if __name__ == "__main__":
             sim.simxSetJointTargetVelocity(
                 clientID, link[2], L2Speed, sim.simx_opmode_oneshot)
             sim.simxSetJointTargetVelocity(
-                clientID, F1, F1Speed, sim.simx_opmode_oneshot)
+                clientID, finger1, F1Speed, sim.simx_opmode_oneshot)
             sim.simxSetJointTargetVelocity(
-                clientID, F2, F2Speed, sim.simx_opmode_oneshot)
+                clientID, finger2, F2Speed, sim.simx_opmode_oneshot)
 
             end_ms = int(round(time.time() * 1000))
             dt_ms = end_ms - start_ms
