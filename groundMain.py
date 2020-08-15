@@ -43,16 +43,13 @@ arm_state = ArmState.RETRACT
 robot_path_index = 0
 
 
-def speedController(clientID, leftMotor, rightMotor, gain, default_speed, error):
+def speedController(clientID, leftMotorSpeed, rightMotorSpeed, gain, default_speed, error):
+
     delta = gain*error
+    leftMotorSpeed = default_speed - delta
+    rightMotorSpeed = default_speed + delta
 
-    left_speed = default_speed - delta
-    right_speed = default_speed + delta
-
-    sim.simxSetJointTargetVelocity(
-        clientID, leftMotorF, left_speed, sim.simx_opmode_oneshot)
-    sim.simxSetJointTargetVelocity(
-        clientID, rightMotorF, right_speed, sim.simx_opmode_oneshot)
+    return leftMotorSpeed, rightMotorSpeed
 
 
 def getOrientationError(clientID, body, target_orientation):
@@ -95,68 +92,7 @@ def updateRobotPathIndex(clientID, robot, path, robot_path_index, radius):
     return robot_path_index, current_point, [None, None]
 
 
-def holdBear():
-    L0Speed = 0
-    L1Speed = 0
-    L2Speed = 0
-    F1Speed = -0.5
-    F2Speed = -0.5
-
-
-def retractArm():
-    # Set Arm to initial Position
-    if arm_state == ArmState.RETRACT:
-        if ccLD1 < 155:
-            L1Speed = 1.0
-        else:
-            L1Speed = 0.0
-            arm_state = 0.5
-
-
-def searchBear(arm_state, robot_state):
-    if (arm_state == ArmState.EXTENT):
-        if ccLD1 > 90:
-            L1Speed = -0.5
-        elif 90 > ccLD1 > 0:
-            L1Speed = -0.1
-        else:
-            L1Speed == 0.0
-            arm_state = ArmState.WAIT
-    elif (arm_state == ArmState.WAIT):
-        #   Fine adjustment looking for MrYork around the Manta
-        L0Speed = 0
-        L1Speed = 0
-        L2Speed = 0
-        # No MrY
-        if cXHand < 1:
-            leftMotorFSpeed = 1.5
-            rightMotorFSpeed = -1.5
-        # Centering momentum in X
-        elif 1 < cXHand < 105:
-            leftMotorFSpeed = 0.4
-            rightMotorFSpeed = -0.4
-        elif cXHand > 145:
-            leftMotorFSpeed = -0.8
-            rightMotorFSpeed = 0.8
-        # Centering momentun in Y
-        elif 1 < cYHand < 65:
-            position4 = (cYHand-155)
-            delta4 = 2*position4/100
-            leftMotorFSpeed = -(0.8-delta4)
-            rightMotorFSpeed = -(0.8-delta4)
-        elif cYHand > 100:
-            leftMotorFSpeed = 0.8
-            rightMotorFSpeed = 0.8
-        # The GroundRobot is ready to deploy
-        else:
-            leftMotorFSpeed = 0
-            rightMotorFSpeed = 0
-            arm_state = ArmState.GRAB
-            robot_state = RobotState.PICKING
-    return arm_state, robot_state
-
-
-def pickBear(clientID, arm_state, camera, cameraCar, body, link, distance, distanceCar, FrontDistance):
+def getBearCenter(clientID, camera):
     res, resolution, image = sim.simxGetVisionSensorImage(
         clientID, camera, 0, sim.simx_opmode_buffer)
 
@@ -167,16 +103,6 @@ def pickBear(clientID, arm_state, camera, cameraCar, body, link, distance, dista
     original = cv2.cvtColor(original, cv2.COLOR_RGB2BGR)
     green = cv2.inRange(original, (0, 100, 0), (32, 255, 255))
 
-    L0Angle = sim.simxGetJointPosition(
-        clientID, link[0], sim.simx_opmode_oneshot_wait)[1]
-    L1Angle = sim.simxGetJointPosition(
-        clientID, link[1], sim.simx_opmode_oneshot_wait)[1]
-    L2Angle = sim.simxGetJointPosition(
-        clientID, link[2], sim.simx_opmode_oneshot_wait)[1]
-
-    res, i1, i2, i3, i4 = sim.simxReadProximitySensor(
-        clientID, distance, sim.simx_opmode_oneshot_wait)
-
     # Moments in the hand
     MHand = cv2.moments(green)
     if MHand["m00"] != 0:
@@ -186,43 +112,122 @@ def pickBear(clientID, arm_state, camera, cameraCar, body, link, distance, dista
         # If there are no green color a 0 will the value be
         cXHand, cYHand = 0, 0
 
-    cv2.circle(green, (cXHand, cYHand), 5, (100, 155, 155), -1)
-    ci2 = np.round(i2, 2)
-    cfd2 = np.round(fd2, 2)
+    return cXHand, cYHand
+
+
+def getLinksAnglesDegrees(clientID, link):
+    L0Angle = sim.simxGetJointPosition(
+        clientID, link[0], sim.simx_opmode_oneshot_wait)[1]
+    L1Angle = sim.simxGetJointPosition(
+        clientID, link[1], sim.simx_opmode_oneshot_wait)[1]
+    L2Angle = sim.simxGetJointPosition(
+        clientID, link[2], sim.simx_opmode_oneshot_wait)[1]
 
     # Robotic Arm Joints DOF adjusted to 90
-    ccLD0 = np.round(np.rad2deg(LD0), 1)
-    ccLD1 = np.round(np.rad2deg(LD1), 1)
-    ccLD2 = np.round(np.rad2deg(LD2), 1)
+    L0Angle = np.round(np.rad2deg(L0Angle), 1)
+    L1Angle = np.round(np.rad2deg(L1Angle), 1)
+    L2Angle = np.round(np.rad2deg(L2Angle), 1)
+
+    return L0Angle, L1Angle, L2Angle
+
+
+def retractArm(clientID, link):
+    L1Speed = 1.0
+    sim.simxSetJointTargetVelocity(
+        clientID, link[1], L1Speed, sim.simx_opmode_oneshot)
+
+    # Set Arm to initial Position
+    L1Angle = getLinksAnglesDegrees(clientID, link)
+    while (L1Angle < 155):
+        L1Angle = getLinksAnglesDegrees(clientID, link)
+
+    L1Speed = 0.0
+    sim.simxSetJointTargetVelocity(
+        clientID, link[1], L1Speed, sim.simx_opmode_oneshot)
+
+
+def searchBear(clientID, link, arm_state, robot_state, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed):
+    if (arm_state == ArmState.EXTENT):
+        L1Angle = getLinksAnglesDegrees(clientID, link)[1]
+        if L1Angle > 90:
+            L1Speed = -0.5
+        elif 90 > L1Angle > 0:
+            L1Speed = -0.1
+        else:
+            L1Speed == 0.0
+            arm_state = ArmState.WAIT
+    elif (arm_state == ArmState.WAIT):
+        #   Fine adjustment looking for MrYork around the Manta
+        L0Speed = 0
+        L1Speed = 0
+        L2Speed = 0
+        cXHand, cYHand = getBearCenter(clientID, camera)
+        # No MrY
+        if cXHand < 1:
+            leftMotorSpeed = 1.5
+            rightMotorSpeed = -1.5
+        # Centering momentum in X
+        elif 1 < cXHand < 105:
+            leftMotorSpeed = 0.4
+            rightMotorSpeed = -0.4
+        elif cXHand > 145:
+            leftMotorSpeed = -0.8
+            rightMotorSpeed = 0.8
+        # Centering momentun in Y
+        elif 1 < cYHand < 65:
+            position4 = (cYHand-155)
+            delta4 = 2*position4/100
+            leftMotorSpeed = -(0.8-delta4)
+            rightMotorSpeed = -(0.8-delta4)
+        elif cYHand > 100:
+            leftMotorSpeed = 0.8
+            rightMotorSpeed = 0.8
+        # The GroundRobot is ready to deploy
+        else:
+            leftMotorSpeed = 0
+            rightMotorFSpeed = 0
+            arm_state = ArmState.GRAB
+            robot_state = RobotState.PICKING
+    return arm_state, robot_state, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed
+
+
+def pickBear(clientID, arm_state, robot_state, camera, body, link, distance, F1, F2, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed, F1Speed, F2Speed):
+    L0Angle, L1Angle, L2Angle = getLinksAnglesDegrees(clientID, link)
 
     #   Deploying the arm towards MrYork
-    if (arm_state=ArmState.GRAB):
-        if (ccLD2 < 125):
+    if (arm_state == ArmState.GRAB):
+        if (L2Angle < 125):
             L2Speed = 0.2
         else:
             L2Speed = 0
-        if ccLD0 > -83:
+        if L0Angle > -83:
             L0Speed = -0.07
         else:
             # Super Fine adjustment to center
             L0Speed = 0
             L1Speed = 0
             L2Speed = 0
+            cXHand = getBearCenter(clientID, camera)[0]
             if 1 < cXHand < 95:
-                leftMotorFSpeed = 0.1
-                rightMotorFSpeed = -0.1
+                leftMotorSpeed = 0.1
+                rightMotorSpeed = -0.1
             elif cXHand > 165:
-                leftMotorFSpeed = -0.1
-                rightMotorFSpeed = 0.1
+                leftMotorSpeed = -0.1
+                rightMotorSpeed = 0.1
             else:
                 # Super Fine adjustment to reach MrY
-                leftMotorFSpeed = 0.0
-                rightMotorFSpeed = 0.0
-                if (i1 == True and ci2[2] > 0.03):
-                    leftMotorFSpeed = -0.08
-                    rightMotorFSpeed = -0.08
+                leftMotorSpeed = 0.0
+                rightMotorSpeed = 0.0
+
+                res, proximity1, proximity2, proximity3, proximity4 = sim.simxReadProximitySensor(
+                    clientID, distance, sim.simx_opmode_oneshot_wait)
+                proximity2 = np.round(proximity2, 2)
+
+                if (proximity1 == True and proximity2[2] > 0.03):
+                    leftMotorSpeed = -0.08
+                    rightMotorSpeed = -0.08
                 else:
-                    if(ccLD0 < -35 and ccLD2 > 40):
+                    if(L0Angle < -35 and L2Angle > 40):
                         F1Speed = -0.5
                         F2Speed = -0.5
                         arm_state = ArmState.RETRACT
@@ -233,11 +238,11 @@ def pickBear(clientID, arm_state, camera, cameraCar, body, link, distance, dista
         L2Speed = 0
         F1Speed = -0.5
         F2Speed = -0.5
-        if(ccLD0 < -25):
+        if(L0Angle < -25):
             L0Speed = 0.3
-        if (ccLD1 < 170):
+        if (L1Angle < 170):
             L1Speed = 0.3
-        if(ccLD2 > -10):
+        if(L2Angle > -10):
             L2Speed = -0.1
         else:
             L0Speed = 0
@@ -245,25 +250,7 @@ def pickBear(clientID, arm_state, camera, cameraCar, body, link, distance, dista
             L2Speed = 0
             arm_state = ArmState.WAIT
             robot_state = RobotState.RETURNING
-
-    cv2.imshow('View in Hand', green)
-
-    # Set actuators on mobile robot
-    sim.simxSetJointTargetVelocity(
-        clientID, L0, L0Speed, sim.simx_opmode_oneshot)
-    sim.simxSetJointTargetVelocity(
-        clientID, L1, L1Speed, sim.simx_opmode_oneshot)
-    sim.simxSetJointTargetVelocity(
-        clientID, L2, L2Speed, sim.simx_opmode_oneshot)
-    sim.simxSetJointTargetVelocity(
-        clientID, L3, L3Speed, sim.simx_opmode_oneshot)
-    sim.simxSetJointTargetVelocity(
-        clientID, F1, F1Speed, sim.simx_opmode_oneshot)
-    sim.simxSetJointTargetVelocity(
-        clientID, F2, F2Speed, sim.simx_opmode_oneshot)
-
-    cv2.waitKey(1)
-    return arm_state, robot_state
+    return arm_state, robot_state, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed, F1Speed, F2Speed
 
 
 if __name__ == "__main__":
@@ -337,6 +324,8 @@ if __name__ == "__main__":
                 path = drone_queue.get()
                 print("Path received...")
 
+            retractArm(clientID, link)
+
             if (robot_state == RobotState.TRAVELLING):
                 robot_path_index, current_point, next_point = updateRobotPathIndex(
                     clientID, body, path, robot_path_index, PATH_POINT_ERROR_RADIUS)
@@ -345,19 +334,36 @@ if __name__ == "__main__":
                         current_point, next_point)
                     orientation_error = getOrientationError(
                         clientID, body, target_orientation)
-                    speedController(clientID, leftMotor, rightMotor,
-                                    CONTROLLER_GAIN, DEFAULT_SPEED, orientation_error)
+                    leftMotorSpeed, rightMotorSpeed = speedController(
+                        clientID leftMotorSpeed, rightMotorSpeed, CONTROLLER_GAIN, DEFAULT_SPEED, orientation_error)
                 else:
                     robot_state = RobotState.SEARCHING
                     print("Reached destinattion...")
                     print("Searching...")
             elif(robot_state == RobotState.SEARCHING):
-                arm_state, robot_state = searchBear(arm_state, robot_state)
+                arm_state, robot_state, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed = searchBear(
+                    clientID, link, arm_state, robot_state, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed)
             elif(robot_state == RobotState.PICKING):
-                arm_state, robot_state = pickBear(
-                    clientID, arm_state, robot_state, camera, cameraCar, body, L0, L1, L2, distance, distanceCar, FrontDistance)
+                arm_state, robot_state, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed, F1Speed, F2Speed = pickBear(
+                    clientID, arm_state, robot_state, camera, body, link, distance, F1, F2, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed, F1Speed, F2Speed)
             elif(robot_state == RobotState.RETURNING):
                 print("I MADE IT !!! I AM RETURNING")
+
+            sim.simxSetJointTargetVelocity(
+                clientID, leftMotor, leftMotorSpeed, sim.simx_opmode_oneshot)
+            sim.simxSetJointTargetVelocity(
+                clientID, rightMotor, rightMotorSpeed, sim.simx_opmode_oneshot)
+            # Set actuators on mobile robot
+            sim.simxSetJointTargetVelocity(
+                clientID, link[0], L0Speed, sim.simx_opmode_oneshot)
+            sim.simxSetJointTargetVelocity(
+                clientID, link[1], L1Speed, sim.simx_opmode_oneshot)
+            sim.simxSetJointTargetVelocity(
+                clientID, link[2], L2Speed, sim.simx_opmode_oneshot)
+            sim.simxSetJointTargetVelocity(
+                clientID, F1, F1Speed, sim.simx_opmode_oneshot)
+            sim.simxSetJointTargetVelocity(
+                clientID, F2, F2Speed, sim.simx_opmode_oneshot)
 
             end_ms = int(round(time.time() * 1000))
             dt_ms = end_ms - start_ms
