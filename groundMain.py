@@ -131,13 +131,13 @@ def getLinksAnglesDegrees(clientID, link):
 
 
 def retractArm(clientID, link):
-    L1Speed = 1.0
+    L1Speed = 0.5
     sim.simxSetJointTargetVelocity(
         clientID, link[1], L1Speed, sim.simx_opmode_oneshot)
 
     # Set Arm to initial Position
     L1Angle = getLinksAnglesDegrees(clientID, link)[1]
-    while (L1Angle < 155):
+    while (L1Angle < 170):
         L1Angle = getLinksAnglesDegrees(clientID, link)[1]
 
     L1Speed = 0.0
@@ -149,10 +149,8 @@ def retractArm(clientID, link):
 def rescueBear(clientID, link, arm_state, robot_state, leftMotorSpeed, rightMotorSpeed, L0Speed, L1Speed, L2Speed, F1Speed, F2Speed):
     if (arm_state == ArmState.EXTENT):
         L1Angle = getLinksAnglesDegrees(clientID, link)[1]
-        if L1Angle > 90:
+        if L1Angle > 0:
             L1Speed = -0.5
-        elif 90 > L1Angle > 0:
-            L1Speed = -0.1
         else:
             L1Speed == 0.0
             arm_state = ArmState.SEARCH
@@ -163,9 +161,9 @@ def rescueBear(clientID, link, arm_state, robot_state, leftMotorSpeed, rightMoto
         L2Speed = 0
         cXHand, cYHand = getBearCenter(clientID, camera)
         # No MrY
-        if cXHand < 1:
-            leftMotorSpeed = 1.5
-            rightMotorSpeed = -1.5
+        if cXHand == 0:
+            leftMotorSpeed = 1.0
+            rightMotorSpeed = -1.0
         # Centering momentum in X
         elif 1 < cXHand < 105:
             leftMotorSpeed = 0.4
