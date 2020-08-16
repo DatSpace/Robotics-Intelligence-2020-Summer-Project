@@ -224,9 +224,6 @@ def rescueBear(clientID, link, arm_state, robot_state):
     #   Folding the arm back to the car with Mr York grabbed
     elif (arm_state == ArmState.RETRACT):
         L0Angle, L1Angle, L2Angle = getLinksAnglesDegrees(clientID, link)
-        L0Speed = 0
-        L1Speed = 0
-        L2Speed = 0
         F1Speed = -0.2
         F2Speed = -0.2
 
@@ -295,7 +292,7 @@ if __name__ == "__main__":
         rightMotor = sim.simxGetObjectHandle(
             clientID, 'MotorA_FR', sim.simx_opmode_oneshot_wait)[1]
 
-        # RobotArm
+        # Robot Arm
         link = []
         link.append(sim.simxGetObjectHandle(
             clientID, 'L0', sim.simx_opmode_oneshot_wait)[1])
