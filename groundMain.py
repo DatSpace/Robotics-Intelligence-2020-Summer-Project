@@ -31,7 +31,7 @@ CONTROLLER_GAIN = 5.0
 
 # Program Variables
 path = []
-robot_state = RobotState.RESCUE
+robot_state = RobotState.TRAVELLING
 arm_state = ArmState.EXTENT
 robot_path_index = 0
 
@@ -49,21 +49,20 @@ def speedController(clientID, gain, default_speed, error):
 
 
 def getOrientationError(clientID, body, target_orientation):
-    # Get the current euler angles for the orientation of the robot
-    orientation = (sim.simxGetObjectOrientation(
-        clientID, body, -1, sim.simx_opmode_oneshot)[1])[2]
+    # Get the current angle for the orientation of the robot from 0 to 2pi, anti-clockwise
+    orientation = euler2rotation((sim.simxGetObjectOrientation(
+        clientID, body, -1, sim.simx_opmode_oneshot)[1])[2])
 
     orientation_error = orientation - target_orientation
 
-    in_min = -np.pi
-    in_max = np.pi
+    in_min = 0
+    in_max = 2.0*np.pi
     out_min = -1.0
     out_max = 1.0
     return (orientation_error - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
 
 def getTargetOrientation(current_point, next_point):
-    #print("Target orientation is:", np.arctan2(next_point[1]-current_point[1], next_point[0]-current_point[0]))
     # Angle of the two points in radians
     return np.arctan2(next_point[1]-current_point[1], next_point[0]-current_point[0])
 
@@ -77,9 +76,6 @@ def updateRobotPathIndex(clientID, robot, path, robot_path_index, radius):
         result, current_robot_location = sim.simxGetObjectPosition(
             clientID, robot, -1, sim.simx_opmode_oneshot)
 
-    print("Index is:", robot_path_index)
-    print("Current is:", current_point)
-    print("Location is:", current_robot_location)
     if (robot_path_index < len(path) - 1):
         next_point = path[robot_path_index + 1]
         if (np.sqrt(((next_point[0] - current_robot_location[0]) ** 2.0) + ((next_point[1] - current_robot_location[1]) ** 2.0)) < radius):
@@ -100,8 +96,6 @@ def getBearCenter(clientID, camera):
 
     green = cv2.inRange(hsv, np.array(
         [45, 254, 0]), np.array([64, 255, 255]))
-    cv2.imshow("test", green)
-    cv2.waitKey(1)
 
     # Moments in the hand
     MHand = cv2.moments(green)
@@ -149,6 +143,13 @@ def retractArm(clientID, link):
 
 def changeScale(point, in_min, in_max, out_min, out_max):
     return (point - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+
+
+def euler2rotation(euler_angle):
+    if (euler_angle < 0):
+        positive = -euler_angle
+        return (2*np.pi) - positive
+    return euler_angle
 
 
 def rescueBear(clientID, link, arm_state, robot_state):
@@ -263,7 +264,7 @@ if __name__ == "__main__":
         target=drone.main, args=(drone_queue,))
 
     # Starting drone process
-    # drone_process.start()
+    drone_process.start()
 
     # Start Program and just in case, close all opened connections
     print('Program started...')
@@ -315,19 +316,16 @@ if __name__ == "__main__":
         res, resolution, image = sim.simxGetVisionSensorImage(
             clientID, camera, 0, sim.simx_opmode_streaming)
 
+        path = drone_queue.get()  # If path list is empty, wait to get a response
+        print("Path received...")
+        retractArm(clientID, link)
+
         # Start main control loop
         print('Starting ground control loop...')
-        test = True
 
         # While connected to the simulator
         while (sim.simxGetConnectionId(clientID) != -1):
             start_ms = int(round(time.time() * 1000))
-
-            if test:  # not path:  # If path list is empty, wait to get a response
-                #path = drone_queue.get()
-                test = False
-                print("Path received...")
-                retractArm(clientID, link)
 
             if (robot_state == RobotState.TRAVELLING):
                 robot_path_index, current_point, next_point = updateRobotPathIndex(
