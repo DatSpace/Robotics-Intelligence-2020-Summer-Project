@@ -309,6 +309,7 @@ def main(drone_queue):
                         clientID, drone_target, -1, sim.simx_opmode_oneshot)
                     start_point = changePointScale([drone_target_position[0], drone_target_position[1]], [
                         10.0, 10.0], [-10.0, -10.0], [0.0, 0.0], [SCR_WIDTH, SCR_HEIGHT]).tolist()
+                    start_point = [round(x) for x in start_point]
 
             key = cv2.waitKey(1) & 0xFF
             if (key == ord('q')):

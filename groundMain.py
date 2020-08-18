@@ -192,7 +192,7 @@ def rescueBear(clientID, link, arm_state, robot_state):
                     L2Speed = 0
                     sim.simxSetJointTargetVelocity(
                         clientID, link[2], L2Speed, sim.simx_opmode_oneshot)
-                if L0Angle <= -80:
+                if L0Angle <= -83:
                     L0Speed = 0
                     sim.simxSetJointTargetVelocity(
                         clientID, link[0], L0Speed, sim.simx_opmode_oneshot)
