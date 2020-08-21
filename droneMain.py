@@ -12,8 +12,9 @@ SCR_WIDTH = 512
 SCR_HEIGHT = 512
 SIMULATION_STEP = 50.0  # in milliseconds
 DRONE_GOAL_HEIGHT = 8.0
-# Based on an image of 512x512 it has a 40 pixel diameter. We use half (diameter/2), which is the radius
-ROBOT_RADIUS_PIXELS = 20
+# Based on an image of 512x512 it has a 19.2 (0.75 units) pixel diameter. We use half (diameter/2), which is the radius
+# Adding 3-4 pixels extra to account for possible error in navigation
+ROBOT_RADIUS_PIXELS = 12
 
 # Processes the binary image to account for the size of the ground robot
 
@@ -109,6 +110,22 @@ def getBinaryMap(image):
     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     gray_image = cv2.blur(gray_image, (2, 2))
     return cv2.threshold(gray_image, 100, 255, cv2.THRESH_BINARY)[1]
+
+
+def fixPostProcessPoints(map, point):
+    check_radius = ROBOT_RADIUS_PIXELS + 5
+    i = point[0]
+    j = point[1]
+    if (map[i][j] == 255):
+        for k in range(-check_radius, check_radius + 1):
+            x = i + k
+            for l in range(-check_radius, check_radius + 1):
+                y = j + l
+                if (x >= 0 and y >= 0 and x < SCR_WIDTH and y < SCR_HEIGHT):
+                    if ((k ** 2.0) + (l ** 2.0) <= check_radius ** 2.0):
+                        if (map[x][y] == 0):
+                            return [x, y]
+    return point
 
 
 def moveToCentre(clientID, drone_target, drone_target_position):
@@ -266,16 +283,20 @@ def main(drone_queue):
                             final_map = proccessToFinalMap(binary_map)
 
                             if (end_point[0] != None):
-                                end_point[1] += 20
+                                # If the end point is covered by a wall (after processing)
+                                end_point = fixPostProcessPoints(
+                                    final_map, end_point)
+                                start_point = fixPostProcessPoints(
+                                    final_map, start_point)
 
                                 print("Starting shortest pathfinding attempts...")
                                 path = None
-                                min_points = 999999  # A huge number to have as maximum
+                                min_points = 999999999  # A huge number to have as maximum
                                 # Run 20 times the pathfinding and return the shortest
                                 for i in range(20):
                                     temp_path = rapidlyExploringRandomTree(
                                         final_map, start_point, end_point)
-                                    if temp_path is not None:
+                                    if (temp_path != None):
                                         points = len(temp_path)
                                         if (points < min_points):
                                             path = temp_path
@@ -289,7 +310,7 @@ def main(drone_queue):
                                 cv2.circle(drawn_map, tuple(
                                     end_point), 10, (0, 0, 255), -1)
 
-                                if (path is not None):
+                                if (path != None):
                                     coppelia_path = []
                                     for point in path:
                                         cv2.circle(drawn_map, tuple(
@@ -298,8 +319,9 @@ def main(drone_queue):
                                             [point[1], point[0]], [0, 0], [512, 512], [10, 10], [-10, -10]))  # Flip point because of current camera orientation and coppelia coordinate system
                                     cv2.imshow("Pre-processed Map", binary_map)
                                     cv2.imshow("Drawn Map", drawn_map)
-                                    print("Sending path to Ground Robot...")
-                                    drone_queue.put(coppelia_path)
+                                    if (drone_queue != None):
+                                        print("Sending path to Ground Robot...")
+                                        drone_queue.put(coppelia_path)
                                 else:
                                     print("No path found...")
                             else:

@@ -25,9 +25,9 @@ class ArmState(Enum):
 
 # Program Constants
 SIMULATION_STEP = 50.0  # in milliseconds
-PATH_POINT_ERROR_RADIUS = 0.5  # in coppelia units
-DEFAULT_SPEED = -1.0
-CONTROLLER_GAIN = 5.0
+PATH_POINT_ERROR_RADIUS = 0.3  # in coppelia units
+ROBOT_SPEED = -0.5
+CONTROLLER_GAIN = 4.0
 
 # Program Variables
 path = []
@@ -39,8 +39,19 @@ robot_path_index = 0
 def speedController(clientID, gain, default_speed, error):
 
     delta = gain*error
+
     leftMotorSpeed = default_speed - delta
     rightMotorSpeed = default_speed + delta
+
+    if (leftMotorSpeed > 1.0):
+        leftMotorSpeed = 1.0
+    elif (leftMotorSpeed < -1.0):
+        leftMotorSpeed = -1
+
+    if (rightMotorSpeed > 1.0):
+        rightMotorSpeed = 1.0
+    elif (rightMotorSpeed < -1.0):
+        rightMotorSpeed = -1
 
     sim.simxSetJointTargetVelocity(
         clientID, leftMotor, leftMotorSpeed, sim.simx_opmode_oneshot)
@@ -50,21 +61,41 @@ def speedController(clientID, gain, default_speed, error):
 
 def getOrientationError(clientID, body, target_orientation):
     # Get the current angle for the orientation of the robot from 0 to 2pi, anti-clockwise
-    orientation = euler2rotation((sim.simxGetObjectOrientation(
-        clientID, body, -1, sim.simx_opmode_oneshot)[1])[2])
+    current_orientation = (sim.simxGetObjectOrientation(
+        clientID, body, -1, sim.simx_opmode_oneshot)[1])[2]
 
-    orientation_error = orientation - target_orientation
+    # WRONG WRONG WRONG
+    orientation_error = current_orientation - target_orientation
+    #print("Error:", orientation_error)
+    #print("Target:", target_orientation)
+    #print("Current:", current_orientation)
 
-    in_min = 0
-    in_max = 2.0*np.pi
+    if (np.abs(orientation_error) > np.pi):
+        if (orientation_error < 0):
+            orientation_error = -np.pi
+        else:
+            orientation_error = np.pi
+
+    in_min = -np.pi/4.0
+    in_max = np.pi/4.0
     out_min = -1.0
     out_max = 1.0
-    return (orientation_error - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+
+    error = (orientation_error - in_min) * \
+        (out_max - out_min) / (in_max - in_min) + out_min
+
+    if (error > out_max):
+        error = out_max
+    elif (error < out_min):
+        error = out_min
+    return error
 
 
 def getTargetOrientation(current_point, next_point):
     # Angle of the two points in radians
-    return np.arctan2(next_point[1]-current_point[1], next_point[0]-current_point[0])
+    # The x coordinates is flipped as is in coppelia
+    # Returns the opposite of the angle to match the y axis of euler angles (left hemisphere is negative, right is positive)
+    return np.arctan2(next_point[1] - current_point[1], next_point[0] - current_point[0])
 
 
 def updateRobotPathIndex(clientID, robot, path, robot_path_index, radius):
@@ -78,7 +109,12 @@ def updateRobotPathIndex(clientID, robot, path, robot_path_index, radius):
 
     if (robot_path_index < len(path) - 1):
         next_point = path[robot_path_index + 1]
-        if (np.sqrt(((next_point[0] - current_robot_location[0]) ** 2.0) + ((next_point[1] - current_robot_location[1]) ** 2.0)) < radius):
+        print("Robot Position:", current_robot_location)
+        print("Current Point:", current_point)
+        print("Next Point:", next_point)
+        print("SQRT:", np.sqrt(((next_point[0] - current_robot_location[0]) ** 2.0) + (
+            (next_point[1] - current_robot_location[1]) ** 2.0)))
+        if (np.sqrt(((next_point[0] - current_robot_location[0]) ** 2.0) + ((next_point[1] - current_robot_location[1]) ** 2.0)) <= radius):
             robot_path_index += 1
         return robot_path_index, current_point, next_point
     return robot_path_index, current_point, [None, None]
@@ -147,8 +183,7 @@ def changeScale(point, in_min, in_max, out_min, out_max):
 
 def euler2rotation(euler_angle):
     if (euler_angle < 0):
-        positive = -euler_angle
-        return (2*np.pi) - positive
+        return (2*np.pi) + euler_angle
     return euler_angle
 
 
@@ -199,8 +234,8 @@ def rescueBear(clientID, link, arm_state, robot_state):
             arm_state = ArmState.GRAB
             print("Preparing to grab...")
         else:
-            leftMotorSpeed = DEFAULT_SPEED
-            rightMotorSpeed = -DEFAULT_SPEED
+            leftMotorSpeed = ROBOT_SPEED
+            rightMotorSpeed = -ROBOT_SPEED
 
     elif (arm_state == ArmState.GRAB):  # Deploying the arm towards MrYork
         cXHand = getBearCenter(clientID, camera)[0]
@@ -211,12 +246,12 @@ def rescueBear(clientID, link, arm_state, robot_state):
         _, isDetected, proximity2, _, _ = sim.simxReadProximitySensor(
             clientID, distance, sim.simx_opmode_oneshot_wait)
 
-        leftMotorSpeed = DEFAULT_SPEED - (gain*errorX)
-        rightMotorSpeed = DEFAULT_SPEED + (gain*errorX)
+        leftMotorSpeed = ROBOT_SPEED - (gain*errorX)
+        rightMotorSpeed = ROBOT_SPEED + (gain*errorX)
         if (isDetected == True):
             if (proximity2[2] > 0.03):
-                leftMotorSpeed = DEFAULT_SPEED*proximity2[2]
-                rightMotorSpeed = DEFAULT_SPEED*proximity2[2]
+                leftMotorSpeed = ROBOT_SPEED*proximity2[2]
+                rightMotorSpeed = ROBOT_SPEED*proximity2[2]
             else:
                 F1Speed = -0.2
                 F2Speed = -0.2
@@ -257,7 +292,6 @@ def rescueBear(clientID, link, arm_state, robot_state):
 
 
 if __name__ == "__main__":
-
     # Creating process and queue...
     drone_queue = multiprocessing.Queue()
     drone_process = multiprocessing.Process(
@@ -336,7 +370,7 @@ if __name__ == "__main__":
                     orientation_error = getOrientationError(
                         clientID, body, target_orientation)
                     speedController(clientID, CONTROLLER_GAIN,
-                                    DEFAULT_SPEED, orientation_error)
+                                    ROBOT_SPEED, orientation_error)
                 else:
                     robot_state = RobotState.RESCUE
                     print("Reached destinattion...")
