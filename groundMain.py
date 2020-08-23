@@ -29,12 +29,6 @@ PATH_POINT_ERROR_RADIUS = 0.3  # in coppelia units
 ROBOT_SPEED = -0.5
 CONTROLLER_GAIN = 4.0
 
-# Program Variables
-path = []
-robot_state = RobotState.TRAVELLING
-arm_state = ArmState.EXTENT
-robot_path_index = 0
-
 
 def speedController(clientID, gain, default_speed, error):
 
@@ -64,11 +58,7 @@ def getOrientationError(clientID, body, target_orientation):
     current_orientation = (sim.simxGetObjectOrientation(
         clientID, body, -1, sim.simx_opmode_oneshot)[1])[2]
 
-    # WRONG WRONG WRONG
     orientation_error = current_orientation - target_orientation
-    #print("Error:", orientation_error)
-    #print("Target:", target_orientation)
-    #print("Current:", current_orientation)
 
     if (np.abs(orientation_error) > np.pi):
         if (orientation_error < 0):
@@ -106,8 +96,23 @@ def getTargetOrientation(robot_position, path, robot_path_index):
 
         # Angle of the two points in radians
         return robot_path_index, np.arctan2(next_point[1] - current_point[1], next_point[0] - current_point[0])
-    else:  # If there are no points available, which means that we are the end, but the first if didnt trigger
+    # If there are no points available, which means that we are the end, but the first if didnt trigger (which means the car believes it is at the end, but it is not)
+    else:
         print("If I was printed, something went terribly wrong!")
+
+
+def getNearestPoint(robot_position, path):
+    min_distance = 999999999
+    min_distance_index = 0
+
+    for point in path:
+        point_distance = np.sqrt(
+            ((point[0] - robot_position[0]) ** 2.0) + ((point[1] - robot_position[1]) ** 2.0))
+        if (point_distance < min_distance):
+            min_distance = point_distance
+            min_distance_index = path.index(point)
+
+    return min_distance_index
 
 
 def getBearCenter(clientID, camera):
@@ -276,6 +281,12 @@ def rescueBear(clientID, link, arm_state, robot_state):
 
 
 if __name__ == "__main__":
+
+    path = []
+    robot_state = RobotState.TRAVELLING
+    arm_state = ArmState.EXTENT
+    robot_path_index = 0
+
     # Creating process and queue...
     drone_queue = multiprocessing.Queue()
     drone_process = multiprocessing.Process(
@@ -354,22 +365,40 @@ if __name__ == "__main__":
                         robot_position, path, robot_path_index)
 
                     if (robot_path_index != None):
-                        if (target_orientation != None):
-                            orientation_error = getOrientationError(
-                                clientID, body, target_orientation)
-                            speedController(
-                                clientID, CONTROLLER_GAIN, ROBOT_SPEED, orientation_error)
-                        else:
-                            print("Reached the final path point ")
+                        orientation_error = getOrientationError(
+                            clientID, body, target_orientation)
+                        speedController(clientID, CONTROLLER_GAIN,
+                                        ROBOT_SPEED, orientation_error)
                     else:
                         robot_state = RobotState.RESCUE
-                        print("Reached destinattion...")
+                        print("Reached destination...")
                         print("Searching...")
             elif(robot_state == RobotState.RESCUE):
                 arm_state, robot_state = rescueBear(
                     clientID, link, arm_state, robot_state)
             elif(robot_state == RobotState.RETURNING):
-                print("I MADE IT !!! I AM RETURNING")
+                result, robot_position = sim.simxGetObjectPosition(
+                    clientID, body, -1, sim.simx_opmode_oneshot)
+
+                if (result == sim.simx_return_ok):
+                    if (robot_path_index == None):
+                        path = path.reverse()
+                        nearest_point_index = getNearestPoint(
+                            robot_position, path)
+                        del path[0:nearest_point_index]
+                        path.insert(0, [robot_position[0], robot_position[1]])
+                        robot_path_index = 0
+                    else:
+                        robot_path_index, target_orientation = getTargetOrientation(
+                            robot_position, path, robot_path_index)
+
+                        if (robot_path_index != None):
+                            orientation_error = getOrientationError(
+                                clientID, body, target_orientation)
+                            speedController(
+                                clientID, CONTROLLER_GAIN, ROBOT_SPEED, orientation_error)
+                        else:
+                            print("I AM BACK AT THE HOSPITAL. HURAY")
 
             end_ms = int(round(time.time() * 1000))
             dt_ms = end_ms - start_ms
