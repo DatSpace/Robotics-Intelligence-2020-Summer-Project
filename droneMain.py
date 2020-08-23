@@ -12,7 +12,7 @@ SCR_WIDTH = 512
 SCR_HEIGHT = 512
 SIMULATION_STEP = 50.0  # in milliseconds
 DRONE_GOAL_POS = [0.0, 0.0, 8.0]
-DRONE_START_POS = []
+DRONE_START_POS = [-7.5, -7.5, 2.0]
 # Based on an image of 512x512 it has a 19.2 (0.75 units) pixel diameter. We use half (diameter/2), which is the radius
 # Adding 3-4 pixels extra to account for possible error in navigation
 ROBOT_RADIUS_PIXELS = 12
@@ -199,11 +199,9 @@ def flyBackward(clientID, drone_target, drone_target_position, step):
 
 def main(drone_queue):
     drone_target_position = np.array([0, 0, 0])
-    binary_map = np.array([])
-    final_map = np.array([])
+    path_coord = []
     start_point = [None, None]
     end_point = [None, None]
-    isReturning = False
 
     # Start Program and just in case, close all opened connections
     print('Program started...')
@@ -241,113 +239,23 @@ def main(drone_queue):
         res, resolution, image = sim.simxGetVisionSensorImage(
             clientID, drone_camera, 0, sim.simx_opmode_streaming)
 
-        drone_target_res = sim.simx_return_novalue_flag
-
         # While connected to the simulator
         while (sim.simxGetConnectionId(clientID) != -1):
-            start_ms = int(round(time.time() * 1000))
+            drone_target_res, drone_target_position = sim.simxGetObjectPosition(
+                clientID, drone_target, -1, sim.simx_opmode_blocking)
 
-            # Elevate drone and start scanning movement
             if (drone_target_res is sim.simx_return_ok):
-                if (isReturning):
-                    if (not np.allclose(drone_target_position, DRONE_START_POS)):
-                        drone_target_position = returnToStart(
-                            clientID, drone_target, drone_target_position)
-                else:
-                    if (not np.allclose(drone_target_position, DRONE_GOAL_POS)):
-                        drone_target_position = moveToCentre(
-                            clientID, drone_target, drone_target_position)
-                    else:
-                        # Wait for 20 seconds to allow drone to stabilize
-                        print("Wait 20s for drone to stabilize...")
-                        time.sleep(20)
-                        # Get the image from the camera
-                        res, resolution, image = sim.simxGetVisionSensorImage(
-                            clientID, drone_camera, 0, sim.simx_opmode_buffer)
-                        if res == sim.simx_return_ok:
-                            print("Captured snapshot of map...")
-                            # Convert from V-REP representation to OpenCV
-                            original_image = np.array(image, dtype=np.uint8)
-                            original_image.resize(
-                                [resolution[0], resolution[1], 3])
-                            original_image = cv2.flip(original_image, 0)
-                            original_image = cv2.cvtColor(
-                                original_image, cv2.COLOR_RGB2BGR)
-                            teddy_location = getTeddyPixelCentre(
-                                original_image)
-
-                            if (teddy_location != None):
-                                end_point = teddy_location
-                            else:
-                                red_car_location = getCarPixelCentre(
-                                    original_image)
-                                if (red_car_location != None):
-                                    end_point = red_car_location
-
-                            filtered_map = getFilteredMap(original_image)
-                            binary_map = getBinaryMap(filtered_map)
-                            final_map = proccessToFinalMap(binary_map)
-
-                            if (end_point[0] != None):
-                                # If the end point is covered by a wall (after processing)
-                                end_point = fixPostProcessPoints(
-                                    final_map, end_point)
-                                start_point = fixPostProcessPoints(
-                                    final_map, start_point)
-
-                                print("Starting shortest pathfinding attempts...")
-                                path = None
-                                min_points = 999999999  # A huge number to have as maximum
-                                # Run 20 times the pathfinding and return the shortest
-                                for i in range(20):
-                                    temp_path = rapidlyExploringRandomTree(
-                                        final_map, start_point, end_point)
-                                    if (temp_path != None):
-                                        points = len(temp_path)
-                                        if (points < min_points):
-                                            path = temp_path
-                                            min_points = points
-
-                                drawn_map = np.copy(final_map)
-                                drawn_map = cv2.cvtColor(
-                                    drawn_map, cv2.COLOR_GRAY2BGR)
-                                cv2.circle(drawn_map, tuple(
-                                    start_point), 10, (255, 0, 0), -1)
-                                cv2.circle(drawn_map, tuple(
-                                    end_point), 10, (0, 0, 255), -1)
-
-                                if (path != None):
-                                    coppelia_path = []
-                                    for point in path:
-                                        cv2.circle(drawn_map, tuple(
-                                            point), 2, (0, 255, 0), -1)
-                                        coppelia_path.append(changePointScale(
-                                            [point[1], point[0]], [0, 0], [512, 512], [10, 10], [-10, -10]))  # Flip point because of current camera orientation and coppelia coordinate system
-
-                                    cv2.imshow("Pre-processed Map", binary_map)
-                                    cv2.imshow("Drawn Map", drawn_map)
-                                    if (drone_queue != None):
-                                        print("Sending path to Ground Robot...")
-                                        drone_queue.put(coppelia_path)
-                                        isReturning = True
-                                else:
-                                    print("No path found...")
-                                    drone_queue.put(None)
-                                    isReturning = True
-                            else:
-                                print("Could not get an end point...")
-                                drone_queue.put(None)
-                                isReturning = True
-            else:
-                drone_target_res, drone_target_position = sim.simxGetObjectPosition(
-                    clientID, drone_target, -1, sim.simx_opmode_oneshot)
-                DRONE_START_POS = drone_target_position
                 start_point = changePointScale([drone_target_position[0], drone_target_position[1]], [
                     10.0, 10.0], [-10.0, -10.0], [0.0, 0.0], [SCR_WIDTH, SCR_HEIGHT]).tolist()
                 start_point = [round(x) for x in start_point]
+                break
 
-            key = cv2.waitKey(1) & 0xFF
-            if (key == ord('q')):
+        while (sim.simxGetConnectionId(clientID) != -1):
+            start_ms = int(round(time.time() * 1000))
+
+            drone_target_position = moveToCentre(
+                clientID, drone_target, drone_target_position)
+            if (np.allclose(drone_target_position, DRONE_GOAL_POS)):
                 break
 
             end_ms = int(round(time.time() * 1000))
@@ -355,6 +263,99 @@ def main(drone_queue):
             sleep_time = SIMULATION_STEP-dt_ms
             if (sleep_time > 0.0):
                 time.sleep(sleep_time/1000.0)
+
+        # Wait for 20 seconds to allow drone to stabilize
+        print("Wait 20s for drone to stabilize...")
+        time.sleep(20)
+
+        # Get the image from the camera
+        res, resolution, image = sim.simxGetVisionSensorImage(
+            clientID, drone_camera, 0, sim.simx_opmode_buffer)
+
+        print("Captured snapshot of map...")
+        # Convert from V-REP representation to OpenCV
+        original_image = np.array(image, dtype=np.uint8)
+        original_image.resize(
+            [resolution[0], resolution[1], 3])
+        original_image = cv2.flip(original_image, 0)
+        original_image = cv2.cvtColor(
+            original_image, cv2.COLOR_RGB2BGR)
+        teddy_location = getTeddyPixelCentre(
+            original_image)
+
+        if (teddy_location != None):
+            end_point = teddy_location
+        else:
+            red_car_location = getCarPixelCentre(
+                original_image)
+            if (red_car_location != None):
+                end_point = red_car_location
+
+        filtered_map = getFilteredMap(original_image)
+        binary_map = getBinaryMap(filtered_map)
+        final_map = proccessToFinalMap(binary_map)
+
+        if (end_point[0] != None):
+            # If the end point is covered by a wall (after processing)
+            end_point = fixPostProcessPoints(
+                final_map, end_point)
+            start_point = fixPostProcessPoints(
+                final_map, start_point)
+
+            print("Starting shortest pathfinding attempts...")
+            path = None
+            min_points = 999999999  # A huge number to have as maximum
+            # Run 20 times the pathfinding and return the shortest
+            for i in range(20):
+                temp_path = rapidlyExploringRandomTree(
+                    final_map, start_point, end_point)
+                if (temp_path != None):
+                    points = len(temp_path)
+                    if (points < min_points):
+                        path = temp_path
+                        min_points = points
+
+            drawn_map = np.copy(final_map)
+            drawn_map = cv2.cvtColor(
+                drawn_map, cv2.COLOR_GRAY2BGR)
+            cv2.circle(drawn_map, tuple(
+                start_point), 10, (255, 0, 0), -1)
+            cv2.circle(drawn_map, tuple(
+                end_point), 10, (0, 0, 255), -1)
+
+            if (path != None):
+                for point in path:
+                    cv2.circle(drawn_map, tuple(
+                        point), 2, (0, 255, 0), -1)
+                    path_coord.append(changePointScale(
+                        [point[1], point[0]], [0, 0], [512, 512], [10, 10], [-10, -10]))  # Flip point because of current camera orientation and coppelia coordinate system
+
+                cv2.imshow("Pre-processed Map", binary_map)
+                cv2.imshow("Drawn Map", drawn_map)
+                cv2.waitKey(1)
+            else:
+                print("No path found...")
+        else:
+            print("Could not get an end point...")
+
+        if (drone_queue != None):
+            print("Sending path to Ground Robot...")
+            drone_queue.put(path_coord)
+
+        while (sim.simxGetConnectionId(clientID) != -1):
+            start_ms = int(round(time.time() * 1000))
+
+            drone_target_position = returnToStart(
+                clientID, drone_target, drone_target_position)
+            if (np.allclose(drone_target_position, DRONE_START_POS)):
+                break
+
+            end_ms = int(round(time.time() * 1000))
+            dt_ms = end_ms - start_ms
+            sleep_time = SIMULATION_STEP-dt_ms
+            if (sleep_time > 0.0):
+                time.sleep(sleep_time/1000.0)
+
         # Before closing the connection to CoppeliaSim, make sure that the last command sent out had time to arrive. You can guarantee this with (for example):
         sim.simxGetPingTime(clientID)
         # Now close the connection to CoppeliaSim:
@@ -362,7 +363,7 @@ def main(drone_queue):
         cv2.destroyAllWindows()
     else:
         print('Failed connecting to remote API server...')
-    print('Simulation has ended...')
+    print('Drone simulation has ended...')
 
 
 if __name__ == "__main__":
