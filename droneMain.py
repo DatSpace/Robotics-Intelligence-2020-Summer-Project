@@ -11,7 +11,8 @@ from RRT import rapidlyExploringRandomTree
 SCR_WIDTH = 512
 SCR_HEIGHT = 512
 SIMULATION_STEP = 50.0  # in milliseconds
-DRONE_GOAL_HEIGHT = 8.0
+DRONE_GOAL_POS = [0.0, 0.0, 8.0]
+DRONE_START_POS = []
 # Based on an image of 512x512 it has a 19.2 (0.75 units) pixel diameter. We use half (diameter/2), which is the radius
 # Adding 3-4 pixels extra to account for possible error in navigation
 ROBOT_RADIUS_PIXELS = 12
@@ -129,23 +130,28 @@ def fixPostProcessPoints(map, point):
 
 
 def moveToCentre(clientID, drone_target, drone_target_position):
-    if (round(drone_target_position[2], 3) != DRONE_GOAL_HEIGHT):
+    if (round(drone_target_position[2], 3) != DRONE_GOAL_POS[2]):
         drone_target_position = flyUp(
             clientID, drone_target, drone_target_position, 0.01)
-    if (round(drone_target_position[1], 3) != 0.0):
+    if (round(drone_target_position[1], 3) != DRONE_GOAL_POS[0]):
         drone_target_position = flyLeft(
             clientID, drone_target, drone_target_position, 0.01)
-    if (round(drone_target_position[0], 3) != 0.0):
+    if (round(drone_target_position[0], 3) != DRONE_GOAL_POS[1]):
         drone_target_position = flyForward(
             clientID, drone_target, drone_target_position, 0.01)
     return drone_target_position
 
 
-def scanMap(clientID, drone_target, drone_target_position):
-    drone_target_position = flyForward(
-        clientID, drone_target, drone_target_position, 0.01)
-    drone_target_position = flyLeft(
-        clientID, drone_target, drone_target_position, 0.01)
+def returnToStart(clientID, drone_target, drone_target_position):
+    if (round(drone_target_position[2], 3) != DRONE_START_POS[2]):
+        drone_target_position = flyDown(
+            clientID, drone_target, drone_target_position, 0.01)
+    if (round(drone_target_position[1], 3) != DRONE_START_POS[0]):
+        drone_target_position = flyRight(
+            clientID, drone_target, drone_target_position, 0.01)
+    if (round(drone_target_position[0], 3) != DRONE_START_POS[1]):
+        drone_target_position = flyBackward(
+            clientID, drone_target, drone_target_position, 0.01)
     return drone_target_position
 
 
@@ -197,6 +203,7 @@ def main(drone_queue):
     final_map = np.array([])
     start_point = [None, None]
     end_point = [None, None]
+    isReturning = False
 
     # Start Program and just in case, close all opened connections
     print('Program started...')
@@ -240,12 +247,14 @@ def main(drone_queue):
         while (sim.simxGetConnectionId(clientID) != -1):
             start_ms = int(round(time.time() * 1000))
 
-            if (final_map.size != 0):
-                pass
-            else:
-                # Elevate drone and start scanning movement
-                if (drone_target_res is sim.simx_return_ok):
-                    if (not np.allclose(drone_target_position, [0.0, 0.0, DRONE_GOAL_HEIGHT])):
+            # Elevate drone and start scanning movement
+            if (drone_target_res is sim.simx_return_ok):
+                if (isReturning):
+                    if (not np.allclose(drone_target_position, DRONE_START_POS)):
+                        drone_target_position = returnToStart(
+                            clientID, drone_target, drone_target_position)
+                else:
+                    if (not np.allclose(drone_target_position, DRONE_GOAL_POS)):
                         drone_target_position = moveToCentre(
                             clientID, drone_target, drone_target_position)
                     else:
@@ -257,18 +266,16 @@ def main(drone_queue):
                             clientID, drone_camera, 0, sim.simx_opmode_buffer)
                         if res == sim.simx_return_ok:
                             print("Captured snapshot of map...")
-
                             # Convert from V-REP representation to OpenCV
                             original_image = np.array(image, dtype=np.uint8)
                             original_image.resize(
                                 [resolution[0], resolution[1], 3])
-
                             original_image = cv2.flip(original_image, 0)
                             original_image = cv2.cvtColor(
                                 original_image, cv2.COLOR_RGB2BGR)
-
                             teddy_location = getTeddyPixelCentre(
                                 original_image)
+
                             if (teddy_location != None):
                                 end_point = teddy_location
                             else:
@@ -279,7 +286,6 @@ def main(drone_queue):
 
                             filtered_map = getFilteredMap(original_image)
                             binary_map = getBinaryMap(filtered_map)
-
                             final_map = proccessToFinalMap(binary_map)
 
                             if (end_point[0] != None):
@@ -317,21 +323,28 @@ def main(drone_queue):
                                             point), 2, (0, 255, 0), -1)
                                         coppelia_path.append(changePointScale(
                                             [point[1], point[0]], [0, 0], [512, 512], [10, 10], [-10, -10]))  # Flip point because of current camera orientation and coppelia coordinate system
+
                                     cv2.imshow("Pre-processed Map", binary_map)
                                     cv2.imshow("Drawn Map", drawn_map)
                                     if (drone_queue != None):
                                         print("Sending path to Ground Robot...")
                                         drone_queue.put(coppelia_path)
+                                        isReturning = True
                                 else:
                                     print("No path found...")
+                                    drone_queue.put(None)
+                                    isReturning = True
                             else:
                                 print("Could not get an end point...")
-                else:
-                    drone_target_res, drone_target_position = sim.simxGetObjectPosition(
-                        clientID, drone_target, -1, sim.simx_opmode_oneshot)
-                    start_point = changePointScale([drone_target_position[0], drone_target_position[1]], [
-                        10.0, 10.0], [-10.0, -10.0], [0.0, 0.0], [SCR_WIDTH, SCR_HEIGHT]).tolist()
-                    start_point = [round(x) for x in start_point]
+                                drone_queue.put(None)
+                                isReturning = True
+            else:
+                drone_target_res, drone_target_position = sim.simxGetObjectPosition(
+                    clientID, drone_target, -1, sim.simx_opmode_oneshot)
+                DRONE_START_POS = drone_target_position
+                start_point = changePointScale([drone_target_position[0], drone_target_position[1]], [
+                    10.0, 10.0], [-10.0, -10.0], [0.0, 0.0], [SCR_WIDTH, SCR_HEIGHT]).tolist()
+                start_point = [round(x) for x in start_point]
 
             key = cv2.waitKey(1) & 0xFF
             if (key == ord('q')):
