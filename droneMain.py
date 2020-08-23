@@ -20,15 +20,25 @@ ROBOT_RADIUS_PIXELS = 12
 # Processes the binary image to account for the size of the ground robot
 
 
-def proccessToFinalMap(binary_map):
-    print("Started processing of binary image...")
-    final_map = np.copy(binary_map)
+def proccessToMap(original_image):
+    print("Started processing of image...")
+    hsv = cv2.cvtColor(original_image, cv2.COLOR_BGR2HSV)
+
+    green_mask = cv2.inRange(hsv, (45, 0, 0), (65, 255, 255))
+    white_mask = cv2.inRange(hsv, (0, 0, 253), (0, 0, 255))
+    concrete_mask = cv2.inRange(hsv, (15, 15, 185), (25, 64, 195))
+
+    concrete_mask = cv2.fastNlMeansDenoising(concrete_mask, None, 40)
+
+    no_tree_mask = white_mask | concrete_mask
+
+    no_tree_map = np.copy(no_tree_mask)
 
     for i in range(SCR_WIDTH):
         for j in range(SCR_HEIGHT):
-            if (binary_map[i][j] == 255):
-                cv2.circle(final_map, (j, i), ROBOT_RADIUS_PIXELS, 255, -1)
-    return final_map
+            if (no_tree_mask[i][j] == 255):
+                cv2.circle(no_tree_map, (j, i), ROBOT_RADIUS_PIXELS, 255, -1)
+    return no_tree_map | green_mask
 
 # Converts the pixel coordinates from the map to world coordinates for the robots
 
@@ -86,31 +96,6 @@ def getCarPixelCentre(original):
         return [cX, cY]
     else:
         return None
-
-
-def getFilteredMap(image):
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
-    green_mask = cv2.inRange(hsv, np.array(
-        [45, 0, 0]), np.array([65, 255, 255]))
-
-    white_mask = cv2.inRange(hsv, np.array(
-        [0, 0, 0]), np.array([0, 0, 255]))
-
-    concrete_mask = cv2.inRange(hsv, np.array(
-        [15, 15, 185]), np.array([25, 64, 195]))
-
-    mask = concrete_mask | white_mask | green_mask
-
-    filtered_image = cv2.bitwise_and(image, image, mask=mask)
-
-    return filtered_image
-
-
-def getBinaryMap(image):
-    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    gray_image = cv2.blur(gray_image, (2, 2))
-    return cv2.threshold(gray_image, 100, 255, cv2.THRESH_BINARY)[1]
 
 
 def fixPostProcessPoints(map, point):
@@ -222,12 +207,6 @@ def main(drone_queue):
         if res != sim.simx_return_ok:
             print('Could not get handle to quadcopter target object...')
 
-        # Drone object
-        res, drone = sim.simxGetObjectHandle(
-            clientID, 'Drone', sim.simx_opmode_oneshot_wait)
-        if res != sim.simx_return_ok:
-            print('Could not get handle to drone object...')
-
         # Bottom drone camera
         res, drone_camera = sim.simxGetObjectHandle(
             clientID, 'DroneFloorCamera', sim.simx_opmode_oneshot_wait)
@@ -280,6 +259,7 @@ def main(drone_queue):
         original_image = cv2.flip(original_image, 0)
         original_image = cv2.cvtColor(
             original_image, cv2.COLOR_RGB2BGR)
+
         teddy_location = getTeddyPixelCentre(
             original_image)
 
@@ -291,9 +271,7 @@ def main(drone_queue):
             if (red_car_location != None):
                 end_point = red_car_location
 
-        filtered_map = getFilteredMap(original_image)
-        binary_map = getBinaryMap(filtered_map)
-        final_map = proccessToFinalMap(binary_map)
+        final_map = proccessToMap(original_image)
 
         if (end_point[0] != None):
             # If the end point is covered by a wall (after processing)
@@ -330,9 +308,8 @@ def main(drone_queue):
                     path_coord.append(changePointScale(
                         [point[1], point[0]], [0, 0], [512, 512], [10, 10], [-10, -10]))  # Flip point because of current camera orientation and coppelia coordinate system
 
-                cv2.imshow("Pre-processed Map", binary_map)
-                cv2.imshow("Drawn Map", drawn_map)
-                cv2.waitKey(1)
+                cv2.imshow("Map", drawn_map)
+                cv2.waitKey(0)
             else:
                 print("No path found...")
         else:
