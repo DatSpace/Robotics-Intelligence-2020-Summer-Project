@@ -91,33 +91,23 @@ def getOrientationError(clientID, body, target_orientation):
     return error
 
 
-def getTargetOrientation(current_point, next_point):
-    # Angle of the two points in radians
-    # The x coordinates is flipped as is in coppelia
-    # Returns the opposite of the angle to match the y axis of euler angles (left hemisphere is negative, right is positive)
-    return np.arctan2(next_point[1] - current_point[1], next_point[0] - current_point[0])
-
-
-def updateRobotPathIndex(clientID, robot, path, robot_path_index, radius):
+def getTargetOrientation(robot_position, path, robot_path_index):
     current_point = path[robot_path_index]
 
-    result, current_robot_location = sim.simxGetObjectPosition(
-        clientID, robot, -1, sim.simx_opmode_oneshot)
-    while (result != sim.simx_return_ok):
-        result, current_robot_location = sim.simxGetObjectPosition(
-            clientID, robot, -1, sim.simx_opmode_oneshot)
+    # If the robot is within 1.5 units radius of the red car (last path point)
+    if (np.sqrt(((path[len(path) - 1][0] - robot_position[0]) ** 2.0) + ((path[len(path) - 1][1] - robot_position[1]) ** 2.0)) <= 0.75):
+        return None, None
 
-    if (robot_path_index < len(path) - 1):
+    # Else if there are more points available (we are not at the end)
+    elif (robot_path_index + 1 < len(path)):
         next_point = path[robot_path_index + 1]
-        print("Robot Position:", current_robot_location)
-        print("Current Point:", current_point)
-        print("Next Point:", next_point)
-        print("SQRT:", np.sqrt(((next_point[0] - current_robot_location[0]) ** 2.0) + (
-            (next_point[1] - current_robot_location[1]) ** 2.0)))
-        if (np.sqrt(((next_point[0] - current_robot_location[0]) ** 2.0) + ((next_point[1] - current_robot_location[1]) ** 2.0)) <= radius):
+        if (np.sqrt(((next_point[0] - robot_position[0]) ** 2.0) + ((next_point[1] - robot_position[1]) ** 2.0)) <= PATH_POINT_ERROR_RADIUS):
             robot_path_index += 1
-        return robot_path_index, current_point, next_point
-    return robot_path_index, current_point, [None, None]
+
+        # Angle of the two points in radians
+        return robot_path_index, np.arctan2(next_point[1] - current_point[1], next_point[0] - current_point[0])
+    else:  # If there are no points available, which means that we are the end, but the first if didnt trigger
+        print("If I was printed, something went terribly wrong!")
 
 
 def getBearCenter(clientID, camera):
@@ -179,12 +169,6 @@ def retractArm(clientID, link):
 
 def changeScale(point, in_min, in_max, out_min, out_max):
     return (point - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
-
-
-def euler2rotation(euler_angle):
-    if (euler_angle < 0):
-        return (2*np.pi) + euler_angle
-    return euler_angle
 
 
 def rescueBear(clientID, link, arm_state, robot_state):
@@ -362,19 +346,25 @@ if __name__ == "__main__":
             start_ms = int(round(time.time() * 1000))
 
             if (robot_state == RobotState.TRAVELLING):
-                robot_path_index, current_point, next_point = updateRobotPathIndex(
-                    clientID, body, path, robot_path_index, PATH_POINT_ERROR_RADIUS)
-                if (next_point[0] != None):  # If we are not yet at the end point
-                    target_orientation = getTargetOrientation(
-                        current_point, next_point)
-                    orientation_error = getOrientationError(
-                        clientID, body, target_orientation)
-                    speedController(clientID, CONTROLLER_GAIN,
-                                    ROBOT_SPEED, orientation_error)
-                else:
-                    robot_state = RobotState.RESCUE
-                    print("Reached destinattion...")
-                    print("Searching...")
+                result, robot_position = sim.simxGetObjectPosition(
+                    clientID, body, -1, sim.simx_opmode_oneshot)
+
+                if (result == sim.simx_return_ok):
+                    robot_path_index, target_orientation = getTargetOrientation(
+                        robot_position, path, robot_path_index)
+
+                    if (robot_path_index != None):
+                        if (target_orientation != None):
+                            orientation_error = getOrientationError(
+                                clientID, body, target_orientation)
+                            speedController(
+                                clientID, CONTROLLER_GAIN, ROBOT_SPEED, orientation_error)
+                        else:
+                            print("Reached the final path point ")
+                    else:
+                        robot_state = RobotState.RESCUE
+                        print("Reached destinattion...")
+                        print("Searching...")
             elif(robot_state == RobotState.RESCUE):
                 arm_state, robot_state = rescueBear(
                     clientID, link, arm_state, robot_state)
