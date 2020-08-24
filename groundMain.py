@@ -30,12 +30,12 @@ ROBOT_SPEED = -0.5
 CONTROLLER_GAIN = 4.0
 
 
-def speedController(clientID, gain, default_speed, error):
+def speedController(clientID, error):
 
-    delta = gain*error
+    delta = CONTROLLER_GAIN*error
 
-    leftMotorSpeed = default_speed - delta
-    rightMotorSpeed = default_speed + delta
+    leftMotorSpeed = ROBOT_SPEED - delta
+    rightMotorSpeed = ROBOT_SPEED + delta
 
     if (leftMotorSpeed > 1.0):
         leftMotorSpeed = 1.0
@@ -48,9 +48,9 @@ def speedController(clientID, gain, default_speed, error):
         rightMotorSpeed = -1
 
     sim.simxSetJointTargetVelocity(
-        clientID, leftMotor, leftMotorSpeed, sim.simx_opmode_oneshot)
+        clientID, leftMotor, 4*leftMotorSpeed, sim.simx_opmode_oneshot)
     sim.simxSetJointTargetVelocity(
-        clientID, rightMotor, rightMotorSpeed, sim.simx_opmode_oneshot)
+        clientID, rightMotor, 4*rightMotorSpeed, sim.simx_opmode_oneshot)
 
 
 def getOrientationError(clientID, body, target_orientation):
@@ -84,7 +84,7 @@ def getOrientationError(clientID, body, target_orientation):
 def getTargetOrientation(robot_position, path, robot_path_index):
     current_point = path[robot_path_index]
 
-    # If the robot is within 1.5 units radius of the red car (last path point)
+    # If the robot is within 0.75 units radius of the red car (last path point)
     if (np.sqrt(((path[len(path) - 1][0] - robot_position[0]) ** 2.0) + ((path[len(path) - 1][1] - robot_position[1]) ** 2.0)) <= 0.75):
         return None, None
 
@@ -157,18 +157,18 @@ def getLinksAnglesDegrees(clientID, link):
 
 
 def retractArm(clientID, link):
-    L1Speed = 0.5
+    L0Speed = 0.2
     sim.simxSetJointTargetVelocity(
-        clientID, link[1], L1Speed, sim.simx_opmode_oneshot)
+        clientID, link[0], L0Speed, sim.simx_opmode_oneshot)
 
     # Set Arm to initial Position
-    L1Angle = getLinksAnglesDegrees(clientID, link)[1]
-    while (L1Angle < 170):
-        L1Angle = getLinksAnglesDegrees(clientID, link)[1]
+    L0Angle = getLinksAnglesDegrees(clientID, link)[0]
+    while (L0Angle < 90):
+        L0Angle = getLinksAnglesDegrees(clientID, link)[0]
 
-    L1Speed = 0.0
+    L0Speed = 0.0
     sim.simxSetJointTargetVelocity(
-        clientID, link[1], L1Speed, sim.simx_opmode_oneshot)
+        clientID, link[0], L0Speed, sim.simx_opmode_oneshot)
     print("Arm retracted...")
 
 
@@ -185,9 +185,9 @@ def rescueBear(clientID, link, arm_state, robot_state):
     F1Speed = 0
     F2Speed = 0
     if (arm_state == ArmState.EXTENT):
-        L1Angle = getLinksAnglesDegrees(clientID, link)[1]
-        if L1Angle > 0:
-            L1Speed = -0.5
+        L0Angle = getLinksAnglesDegrees(clientID, link)[0]
+        if L0Angle > 0:
+            L0Speed = -0.2
         else:
             arm_state = ArmState.SEARCH
             print("Searching for bear...")
@@ -283,7 +283,7 @@ def rescueBear(clientID, link, arm_state, robot_state):
 if __name__ == "__main__":
 
     path = []
-    robot_state = RobotState.TRAVELLING
+    robot_state = RobotState.RESCUE
     arm_state = ArmState.EXTENT
     robot_path_index = 0
 
@@ -293,7 +293,7 @@ if __name__ == "__main__":
         target=drone.main, args=(drone_queue,))
 
     # Starting drone process
-    drone_process.start()
+    # drone_process.start()
 
     # Start Program and just in case, close all opened connections
     print('Program started...')
@@ -345,7 +345,7 @@ if __name__ == "__main__":
         res, resolution, image = sim.simxGetVisionSensorImage(
             clientID, camera, 0, sim.simx_opmode_streaming)
 
-        path = drone_queue.get()  # If path list is empty, wait to get a response
+        # path = drone_queue.get()  # If path list is empty, wait to get a response
         print("Path received...")
         retractArm(clientID, link)
 
@@ -367,8 +367,7 @@ if __name__ == "__main__":
                     if (robot_path_index != None):
                         orientation_error = getOrientationError(
                             clientID, body, target_orientation)
-                        speedController(clientID, CONTROLLER_GAIN,
-                                        ROBOT_SPEED, orientation_error)
+                        speedController(clientID, orientation_error)
                     else:
                         robot_state = RobotState.RESCUE
                         print("Reached destination...")
@@ -382,7 +381,7 @@ if __name__ == "__main__":
 
                 if (result == sim.simx_return_ok):
                     if (robot_path_index == None):
-                        path = path.reverse()
+                        path.reverse()
                         nearest_point_index = getNearestPoint(
                             robot_position, path)
                         del path[0:nearest_point_index]
@@ -396,7 +395,7 @@ if __name__ == "__main__":
                             orientation_error = getOrientationError(
                                 clientID, body, target_orientation)
                             speedController(
-                                clientID, CONTROLLER_GAIN, ROBOT_SPEED, orientation_error)
+                                clientID, orientation_error)
                         else:
                             print("I AM BACK AT THE HOSPITAL. HURAY")
 
