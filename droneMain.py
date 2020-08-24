@@ -234,7 +234,7 @@ def main(drone_queue):
 
             drone_target_position = moveToCentre(
                 clientID, drone_target, drone_target_position)
-            if (np.allclose(drone_target_position, DRONE_GOAL_POS)):
+            if (np.allclose(np.around(np.array(drone_target_position), 2), np.around(np.array(DRONE_GOAL_POS), 2))):
                 break
 
             end_ms = int(round(time.time() * 1000))
@@ -324,7 +324,7 @@ def main(drone_queue):
 
             drone_target_position = returnToStart(
                 clientID, drone_target, drone_target_position)
-            if (np.allclose(drone_target_position, DRONE_START_POS)):
+            if (np.allclose(np.around(np.array(drone_target_position), 2), np.around(np.array(DRONE_START_POS), 2))):
                 break
 
             end_ms = int(round(time.time() * 1000))
