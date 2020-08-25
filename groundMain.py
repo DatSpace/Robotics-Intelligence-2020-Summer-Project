@@ -144,9 +144,9 @@ def getLinksAnglesDegrees(clientID, link):
 
 def getBladesDegrees(clientID, blade):
     LeftBlade = sim.simxGetJointPosition(
-        clientID, blade[0], sim.simx_opmode_oneshot_wait)[1]
+        clientID, blade[0], sim.simx_opmode_blocking)[1]
     RightBlade = sim.simxGetJointPosition(
-        clientID, blade[1], sim.simx_opmode_oneshot_wait)[1]
+        clientID, blade[1], sim.simx_opmode_blocking)[1]
 
     # Robotic Arm Joints DOF adjusted to 90
     LeftBlade = np.round(np.rad2deg(LeftBlade), 1)
@@ -155,34 +155,60 @@ def getBladesDegrees(clientID, blade):
     return LeftBlade, RightBlade
 
 
-def removeObstacle():
-    LeftBlade, RightBlade = getBladesDegrees(clientID, blade)
+def removeObstacle(clientID, blade, FrontDistance):
 
-    _, isDetected, FrontDistance2, _, _ = sim.simxReadProximitySensor(
-        clientID, FrontDistance, sim.simx_opmode_oneshot_wait)
+    _, isDetected, distance, _, _ = sim.simxReadProximitySensor(
+        clientID, FrontDistance, sim.simx_opmode_blocking)
 
-    if (isDetected == True):
-        if (FrontDistance2[0] > 0.0 and LeftBlade < 130):
+    if (isDetected):
+        start_time = int(time.time())
+
+        if (distance[0] > 0.0):
             LeftBladeSpeed = 2
-            RightBladeSpeed = 0
-        elif(FrontDistance2[0] < 0.0 and RightBlade > -130):
-            RightBladeSpeed = -2
-            LeftBladeSpeed = 0
-        else:
-            RightBladeSpeed = 0
-            LeftBladeSpeed = 0
-        if RightBlade < 0.0:
-            RightBladeSpeed = 1
-        elif LeftBlade > 0.0:
-            LeftBladeSpeed = -1
-        else:
-            LeftBladeSpeed = 0.0
-            RightBladeSpeed = 0.0
+            sim.simxSetJointTargetVelocity(
+                clientID, blade[0], LeftBladeSpeed, sim.simx_opmode_oneshot)
+            while(LeftBladeSpeed != 0):
+                LeftBlade = getBladesDegrees(clientID, blade)[0]
+                if (LeftBlade >= 130):
+                    LeftBladeSpeed = 0
+                    sim.simxSetJointTargetVelocity(
+                        clientID, blade[0], LeftBladeSpeed, sim.simx_opmode_oneshot)
+                end_time = int(time.time())
+                if (end_time - start_time > 10):
+                    break
 
-    sim.simxSetJointTargetVelocity(
-        clientID, LeftBlade, LeftBladeSpeed, sim.simx_opmode_oneshot)
-    sim.simxSetJointTargetVelocity(
-        clientID, RightBlade, RightBladeSpeed, sim.simx_opmode_oneshot)
+            LeftBladeSpeed = -1
+            sim.simxSetJointTargetVelocity(
+                clientID, blade[0], LeftBladeSpeed, sim.simx_opmode_oneshot)
+            while(LeftBladeSpeed != 0):
+                LeftBlade = getBladesDegrees(clientID, blade)[0]
+                if (LeftBlade <= 0):
+                    LeftBladeSpeed = 0
+                    sim.simxSetJointTargetVelocity(
+                        clientID, blade[0], LeftBladeSpeed, sim.simx_opmode_oneshot)
+        else:
+            RightBladeSpeed = -2
+            sim.simxSetJointTargetVelocity(
+                clientID, blade[1], RightBladeSpeed, sim.simx_opmode_oneshot)
+            while(RightBladeSpeed != 0):
+                RightBlade = getBladesDegrees(clientID, blade)[1]
+                if(RightBlade <= -130):
+                    RightBladeSpeed = 0
+                    sim.simxSetJointTargetVelocity(
+                        clientID, blade[1], RightBladeSpeed, sim.simx_opmode_oneshot)
+                end_time = int(time.time())
+                if (end_time - start_time > 10):
+                    break
+
+            RightBladeSpeed = 1
+            sim.simxSetJointTargetVelocity(
+                clientID, blade[1], RightBladeSpeed, sim.simx_opmode_oneshot)
+            while(RightBladeSpeed != 0):
+                RightBlade = getBladesDegrees(clientID, blade)[1]
+                if (RightBlade >= 0):
+                    RightBladeSpeed = 0
+                    sim.simxSetJointTargetVelocity(
+                        clientID, blade[1], RightBladeSpeed, sim.simx_opmode_oneshot)
 
 
 def retractArm(clientID, link):
@@ -205,7 +231,7 @@ def changeScale(point, in_min, in_max, out_min, out_max):
     return (point - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
 
-def rescueBear(clientID, link, blade, arm_state, robot_state):
+def rescueBear(clientID, leftMotor, rightMotor, finger1, finger2, link, blade, FrontDistance, arm_state, robot_state):
     L0Speed = 0
     L1Speed = 0
     L2Speed = 0
@@ -218,7 +244,7 @@ def rescueBear(clientID, link, blade, arm_state, robot_state):
         L2Angle = getLinksAnglesDegrees(clientID, link)[2]
         if L0Angle > 0:
             L0Speed = -0.2
-        elif L2Angle < 25:
+        elif L2Angle < 35:
             L2Speed = 0.2
         else:
             arm_state = ArmState.SEARCH
@@ -226,6 +252,13 @@ def rescueBear(clientID, link, blade, arm_state, robot_state):
     elif (arm_state == ArmState.SEARCH):
         cXHand = getBearCenter(clientID, camera)[0]
         if (cXHand != None):
+            sim.simxSetJointTargetVelocity(
+                clientID, leftMotor, leftMotorSpeed, sim.simx_opmode_oneshot)
+            sim.simxSetJointTargetVelocity(
+                clientID, rightMotor, rightMotorSpeed, sim.simx_opmode_oneshot)
+
+            removeObstacle(clientID, blade, FrontDistance)
+
             L2Speed = 0.2
             L0Speed = -0.2
 
@@ -376,9 +409,9 @@ if __name__ == "__main__":
 
         # Blades
         blade = []
-        link.append(sim.simxGetObjectHandle(
+        blade.append(sim.simxGetObjectHandle(
             clientID, 'BladeL', sim.simx_opmode_blocking)[1])
-        link.append(sim.simxGetObjectHandle(
+        blade.append(sim.simxGetObjectHandle(
             clientID, 'BladeR', sim.simx_opmode_blocking)[1])
 
         # Robot
@@ -423,7 +456,7 @@ if __name__ == "__main__":
                         print("Searching...")
             elif(robot_state == RobotState.RESCUE):
                 arm_state, robot_state = rescueBear(
-                    clientID, link, blade, arm_state, robot_state)
+                    clientID, leftMotor, rightMotor, finger1, finger2, link, blade, FrontDistance, arm_state, robot_state)
             elif(robot_state == RobotState.RETURNING):
                 result, robot_position = sim.simxGetObjectPosition(
                     clientID, body, -1, sim.simx_opmode_blocking)
