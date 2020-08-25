@@ -160,10 +160,7 @@ def removeObstacle():
 
     _, isDetected, FrontDistance2, _, _ = sim.simxReadProximitySensor(
         clientID, FrontDistance, sim.simx_opmode_oneshot_wait)
-    sim.simxSetJointTargetVelocity(
-        clientID, LeftBlade, LeftBladeSpeed, sim.simx_opmode_oneshot)
-    sim.simxSetJointTargetVelocity(
-        clientID, RightBlade, RightBladeSpeed, sim.simx_opmode_oneshot)
+
     if (isDetected == True):
         if (FrontDistance2[0] > 0.0 and LeftBlade < 130):
             LeftBladeSpeed = 2
@@ -181,6 +178,11 @@ def removeObstacle():
         else:
             LeftBladeSpeed = 0.0
             RightBladeSpeed = 0.0
+
+    sim.simxSetJointTargetVelocity(
+        clientID, LeftBlade, LeftBladeSpeed, sim.simx_opmode_oneshot)
+    sim.simxSetJointTargetVelocity(
+        clientID, RightBlade, RightBladeSpeed, sim.simx_opmode_oneshot)
 
 
 def retractArm(clientID, link):
@@ -211,8 +213,6 @@ def rescueBear(clientID, link, blade, arm_state, robot_state):
     rightMotorSpeed = 0
     F1Speed = 0
     F2Speed = 0
-    LeftBladeSpeed = 0
-    RightBladeSpeed = 0
     if (arm_state == ArmState.EXTENT):
         L0Angle = getLinksAnglesDegrees(clientID, link)[0]
         L2Angle = getLinksAnglesDegrees(clientID, link)[2]
@@ -442,7 +442,12 @@ if __name__ == "__main__":
                             speedController(
                                 clientID, orientation_error)
                         else:
-                            print("I AM BACK AT THE HOSPITAL. HURAY")
+                            print("The patient has been safely returned...")
+                            sim.simxSetJointTargetVelocity(
+                                clientID, leftMotor, 0.0, sim.simx_opmode_oneshot)
+                            sim.simxSetJointTargetVelocity(
+                                clientID, rightMotor, 0.0, sim.simx_opmode_oneshot)
+                            break
 
             end_ms = int(round(time.time() * 1000))
             dt_ms = end_ms - start_ms
