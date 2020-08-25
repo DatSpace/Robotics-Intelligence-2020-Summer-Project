@@ -20,7 +20,7 @@ ROBOT_RADIUS_PIXELS = 12
 # Processes the binary image to account for the size of the ground robot
 
 
-def proccessToMap(original_image):
+def proccessToMap(original_image, end_point):
     print("Started processing of image...")
     hsv = cv2.cvtColor(original_image, cv2.COLOR_BGR2HSV)
 
@@ -38,6 +38,8 @@ def proccessToMap(original_image):
         for j in range(SCR_HEIGHT):
             if (no_tree_mask[i][j] == 255):
                 cv2.circle(no_tree_map, (j, i), ROBOT_RADIUS_PIXELS, 255, -1)
+
+    cv2.circle(no_tree_map, tuple(end_point), ROBOT_RADIUS_PIXELS, 255, -1)
     return no_tree_map | green_mask
 
 # Converts the pixel coordinates from the map to world coordinates for the robots
@@ -48,7 +50,7 @@ def changePointScale(point, in_min, in_max, out_min, out_max):
         (in_max[0] - in_min[0]) + out_min[0]
     newY = (point[1] - in_min[1]) * (out_max[1] - out_min[1]) / \
         (in_max[1] - in_min[1]) + out_min[1]
-    return np.array([newX, newY])
+    return [newX, newY]
 
 
 def calculateMoments(image, mask):
@@ -225,7 +227,7 @@ def main(drone_queue):
 
             if (drone_target_res is sim.simx_return_ok):
                 start_point = changePointScale([drone_target_position[0], drone_target_position[1]], [
-                    10.0, 10.0], [-10.0, -10.0], [0.0, 0.0], [SCR_WIDTH, SCR_HEIGHT]).tolist()
+                    10.0, 10.0], [-10.0, -10.0], [0.0, 0.0], [SCR_WIDTH, SCR_HEIGHT])
                 start_point = [round(x) for x in start_point]
                 break
 
@@ -271,7 +273,7 @@ def main(drone_queue):
             if (red_car_location != None):
                 end_point = red_car_location
 
-        final_map = proccessToMap(original_image)
+        final_map = proccessToMap(original_image, end_point)
 
         if (end_point[0] != None):
             # If the end point is covered by a wall (after processing)
@@ -280,18 +282,11 @@ def main(drone_queue):
             start_point = fixPostProcessPoints(
                 final_map, start_point)
 
-            print("Starting shortest pathfinding attempts...")
+            print("Starting pathfinding attempts...")
             path = None
-            min_points = 999999999  # A huge number to have as maximum
-            # Run 20 times the pathfinding and return the shortest
-            for i in range(20):
-                temp_path = rapidlyExploringRandomTree(
+            while (path == None):
+                path = rapidlyExploringRandomTree(
                     final_map, start_point, end_point)
-                if (temp_path != None):
-                    points = len(temp_path)
-                    if (points < min_points):
-                        path = temp_path
-                        min_points = points
 
             drawn_map = np.copy(final_map)
             drawn_map = cv2.cvtColor(
@@ -301,23 +296,20 @@ def main(drone_queue):
             cv2.circle(drawn_map, tuple(
                 end_point), 10, (0, 0, 255), -1)
 
-            if (path != None):
-                for point in path:
-                    cv2.circle(drawn_map, tuple(
-                        point), 2, (0, 255, 0), -1)
-                    path_coord.append(changePointScale(
-                        [point[1], point[0]], [0, 0], [512, 512], [10, 10], [-10, -10]))  # Flip point because of current camera orientation and coppelia coordinate system
-
-                cv2.imshow("Map", drawn_map)
-                cv2.waitKey(0)
-            else:
-                print("No path found...")
+            for point in path:
+                cv2.circle(drawn_map, tuple(point), 2, (0, 255, 0), -1)
+                # Flip point because of current camera orientation and coppelia coordinate system
+                path_coord.append(changePointScale([point[1], point[0]], [
+                                  0, 0], [512, 512], [10, 10], [-10, -10]))
         else:
             print("Could not get an end point...")
 
         if (drone_queue != None):
             print("Sending path to Ground Robot...")
             drone_queue.put(path_coord)
+
+        cv2.imshow("Map", drawn_map)
+        cv2.waitKey(0)
 
         while (sim.simxGetConnectionId(clientID) != -1):
             start_ms = int(round(time.time() * 1000))

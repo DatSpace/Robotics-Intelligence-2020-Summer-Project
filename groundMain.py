@@ -56,7 +56,7 @@ def speedController(clientID, error):
 def getOrientationError(clientID, body, target_orientation):
     # Get the current angle for the orientation of the robot from 0 to 2pi, anti-clockwise
     current_orientation = (sim.simxGetObjectOrientation(
-        clientID, body, -1, sim.simx_opmode_oneshot)[1])[2]
+        clientID, body, -1, sim.simx_opmode_blocking)[1])[2]
 
     orientation_error = current_orientation - target_orientation
 
@@ -101,20 +101,6 @@ def getTargetOrientation(robot_position, path, robot_path_index):
         print("If I was printed, something went terribly wrong!")
 
 
-def getNearestPoint(robot_position, path):
-    min_distance = 999999999
-    min_distance_index = 0
-
-    for point in path:
-        point_distance = np.sqrt(
-            ((point[0] - robot_position[0]) ** 2.0) + ((point[1] - robot_position[1]) ** 2.0))
-        if (point_distance < min_distance):
-            min_distance = point_distance
-            min_distance_index = path.index(point)
-
-    return min_distance_index
-
-
 def getBearCenter(clientID, camera):
     res, resolution, image = sim.simxGetVisionSensorImage(
         clientID, camera, 0, sim.simx_opmode_buffer)
@@ -142,11 +128,11 @@ def getBearCenter(clientID, camera):
 
 def getLinksAnglesDegrees(clientID, link):
     L0Angle = sim.simxGetJointPosition(
-        clientID, link[0], sim.simx_opmode_oneshot_wait)[1]
+        clientID, link[0], sim.simx_opmode_blocking)[1]
     L1Angle = sim.simxGetJointPosition(
-        clientID, link[1], sim.simx_opmode_oneshot_wait)[1]
+        clientID, link[1], sim.simx_opmode_blocking)[1]
     L2Angle = sim.simxGetJointPosition(
-        clientID, link[2], sim.simx_opmode_oneshot_wait)[1]
+        clientID, link[2], sim.simx_opmode_blocking)[1]
 
     # Robotic Arm Joints DOF adjusted to 90
     L0Angle = np.round(np.rad2deg(L0Angle), 1)
@@ -155,9 +141,21 @@ def getLinksAnglesDegrees(clientID, link):
 
     return L0Angle, L1Angle, L2Angle
 
+def getBladesDegrees(clientID, blade):
+    LeftBlade = sim.simxGetJointPosition(
+        clientID, blade[0], sim.simx_opmode_oneshot_wait)[1]
+    RightBlade = sim.simxGetJointPosition(
+        clientID, blade[1], sim.simx_opmode_oneshot_wait)[1]
+
+    # Robotic Arm Joints DOF adjusted to 90
+    LeftBlade= np.round(np.rad2deg(LeftBlade), 1)
+    RightBlade = np.round(np.rad2deg(RightBlade), 1)
+
+    return LeftBlade, RightBlade
 
 def retractArm(clientID, link):
     L0Speed = 0.2
+
     sim.simxSetJointTargetVelocity(
         clientID, link[0], L0Speed, sim.simx_opmode_oneshot)
 
@@ -169,14 +167,13 @@ def retractArm(clientID, link):
     L0Speed = 0.0
     sim.simxSetJointTargetVelocity(
         clientID, link[0], L0Speed, sim.simx_opmode_oneshot)
-    print("Arm retracted...")
 
 
 def changeScale(point, in_min, in_max, out_min, out_max):
     return (point - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
 
-def rescueBear(clientID, link, arm_state, robot_state):
+def rescueBear(clientID, link, blade, arm_state, robot_state):
     L0Speed = 0
     L1Speed = 0
     L2Speed = 0
@@ -184,10 +181,15 @@ def rescueBear(clientID, link, arm_state, robot_state):
     rightMotorSpeed = 0
     F1Speed = 0
     F2Speed = 0
+    LeftBladeSpeed= 0
+    RightBladeSpeed = 0
     if (arm_state == ArmState.EXTENT):
         L0Angle = getLinksAnglesDegrees(clientID, link)[0]
+        L2Angle = getLinksAnglesDegrees(clientID, link)[2]
         if L0Angle > 0:
             L0Speed = -0.2
+        elif L2Angle < 25:
+            L2Speed = 0.2
         else:
             arm_state = ArmState.SEARCH
             print("Searching for bear...")
@@ -196,8 +198,6 @@ def rescueBear(clientID, link, arm_state, robot_state):
         if (cXHand != None):
             L2Speed = 0.2
             L0Speed = -0.2
-            leftMotorSpeed = 0
-            rightMotorSpeed = 0
 
             sim.simxSetJointTargetVelocity(
                 clientID, leftMotor, leftMotorSpeed, sim.simx_opmode_oneshot)
@@ -225,41 +225,74 @@ def rescueBear(clientID, link, arm_state, robot_state):
         else:
             leftMotorSpeed = ROBOT_SPEED
             rightMotorSpeed = -ROBOT_SPEED
-
+    elif(arm_state==ArmState.OBSTACLE):
+        LeftBlade, RightBlade = getBladesDegrees(clientID, blade)
+        
+        _, isDetected, FrontDistance2, _, _ = sim.simxReadProximitySensor(
+            clientID, FrontDistance, sim.simx_opmode_oneshot_wait)
+        sim.simxSetJointTargetVelocity(
+                clientID, LeftBlade, LeftBladeSpeed, sim.simx_opmode_oneshot)
+        sim.simxSetJointTargetVelocity(
+                clientID, RightBlade, RightBladeSpeed, sim.simx_opmode_oneshot)
+        if (isDetected == True):
+            if (FrontDistance2[0]>0.0 and LeftBlade<130):
+                LeftBladeSpeed =2 
+                RightBladeSpeed = 0
+            elif(FrontDistance2[0]<0.0  and RightBlade>-130):
+                RightBladeSpeed = -2
+                LeftBladeSpeed = 0
+            else:
+                RightBladeSpeed = 0
+                LeftBladeSpeed = 0
+            if RightBlade<0.0:
+                RightBladeSpeed = 1
+            elif LeftBlade>0.0:
+                LeftBladeSpeed = -1
+            else:
+                LeftBladeSpeed = 0.0
+                RightBladeSpeed = 0.0
     elif (arm_state == ArmState.GRAB):  # Deploying the arm towards MrYork
         cXHand = getBearCenter(clientID, camera)[0]
 
-        gain = 1.0
-        errorX = changeScale(cXHand, 0.0, 256.0, -1.0, 1.0)
+        if (cXHand != None):
+            gain = 1.0
+            errorX = changeScale(cXHand, 0.0, 256.0, -1.0, 1.0)
 
-        _, isDetected, proximity2, _, _ = sim.simxReadProximitySensor(
-            clientID, distance, sim.simx_opmode_oneshot_wait)
+            _, isDetected, proximity2, _, _ = sim.simxReadProximitySensor(
+                clientID, distance, sim.simx_opmode_blocking)
 
-        leftMotorSpeed = ROBOT_SPEED - (gain*errorX)
-        rightMotorSpeed = ROBOT_SPEED + (gain*errorX)
-        if (isDetected == True):
-            if (proximity2[2] > 0.03):
-                leftMotorSpeed = ROBOT_SPEED*proximity2[2]
-                rightMotorSpeed = ROBOT_SPEED*proximity2[2]
-            else:
-                F1Speed = -0.2
-                F2Speed = -0.2
-                arm_state = ArmState.RETRACT
-                print("Bear grabbed and retracting...")
-    #   Folding the arm back to the car with Mr York grabbed
+            leftMotorSpeed = ROBOT_SPEED - (gain*errorX)
+            rightMotorSpeed = ROBOT_SPEED + (gain*errorX)
+            if (isDetected == True):
+                if (proximity2[2] > 0.03):
+                    leftMotorSpeed = ROBOT_SPEED*proximity2[2]
+                    rightMotorSpeed = ROBOT_SPEED*proximity2[2]
+                else:
+                    F1Speed = -0.1
+                    F2Speed = -0.1
+                    sim.simxSetJointTargetVelocity(
+                        clientID, finger1, F1Speed, sim.simx_opmode_oneshot)
+                    sim.simxSetJointTargetVelocity(
+                        clientID, finger2, F2Speed, sim.simx_opmode_oneshot)
+                    # Wait for 5 seconds for fingers to close, while slowly moving forward
+                    time.sleep(5)
+                    arm_state = ArmState.RETRACT
+                    print("Bear grabbed and retracting...")
+        else:
+            leftMotorSpeed = ROBOT_SPEED
+            rightMotorSpeed = -ROBOT_SPEED
+    # Folding the arm back to the car with Mr York grabbed
     elif (arm_state == ArmState.RETRACT):
         L0Angle, L1Angle, L2Angle = getLinksAnglesDegrees(clientID, link)
-        F1Speed = -0.2
-        F2Speed = -0.2
 
-        if(L0Angle < -25):
+        if (L0Angle < 90):
             L0Speed = 0.2
-        if (L1Angle < 170):
-            L1Speed = 0.2
-        if(L2Angle > -10):
+        if (L2Angle > 0):
             L2Speed = -0.2
-        else:
+
+        if (L0Speed == 0 and L2Speed == 0):
             robot_state = RobotState.RETURNING
+            print("Arm retracted...")
 
     sim.simxSetJointTargetVelocity(
         clientID, leftMotor, leftMotorSpeed, sim.simx_opmode_oneshot)
@@ -272,10 +305,6 @@ def rescueBear(clientID, link, arm_state, robot_state):
         clientID, link[1], L1Speed, sim.simx_opmode_oneshot)
     sim.simxSetJointTargetVelocity(
         clientID, link[2], L2Speed, sim.simx_opmode_oneshot)
-    sim.simxSetJointTargetVelocity(
-        clientID, finger1, F1Speed, sim.simx_opmode_oneshot)
-    sim.simxSetJointTargetVelocity(
-        clientID, finger2, F2Speed, sim.simx_opmode_oneshot)
 
     return arm_state, robot_state
 
@@ -283,7 +312,7 @@ def rescueBear(clientID, link, arm_state, robot_state):
 if __name__ == "__main__":
 
     path = []
-    robot_state = RobotState.RESCUE
+    robot_state = RobotState.TRAVELLING
     arm_state = ArmState.EXTENT
     robot_path_index = 0
 
@@ -293,7 +322,7 @@ if __name__ == "__main__":
         target=drone.main, args=(drone_queue,))
 
     # Starting drone process
-    # drone_process.start()
+    drone_process.start()
 
     # Start Program and just in case, close all opened connections
     print('Program started...')
@@ -312,40 +341,51 @@ if __name__ == "__main__":
 
         # Vision and proximity sensors in Hand
         camera = sim.simxGetObjectHandle(
-            clientID, 'Camera', sim.simx_opmode_oneshot_wait)[1]
+            clientID, 'Camera', sim.simx_opmode_blocking)[1]
         distance = sim.simxGetObjectHandle(
-            clientID, 'Proximity', sim.simx_opmode_oneshot_wait)[1]
+            clientID, 'Proximity', sim.simx_opmode_blocking)[1]
+        
+        #Proximity Sensor in front of the chasis
+        FrontDistance = sim.simxGetObjectHandle(
+            clientID, 'FrontSensor', sim.simx_opmode_oneshot_wait)[1]
 
         # Wheel drive motors
         leftMotor = sim.simxGetObjectHandle(
-            clientID, 'MotorA_FL', sim.simx_opmode_oneshot_wait)[1]
+            clientID, 'MotorA_FL', sim.simx_opmode_blocking)[1]
         rightMotor = sim.simxGetObjectHandle(
-            clientID, 'MotorA_FR', sim.simx_opmode_oneshot_wait)[1]
+            clientID, 'MotorA_FR', sim.simx_opmode_blocking)[1]
 
         # Robot Arm
         link = []
         link.append(sim.simxGetObjectHandle(
-            clientID, 'L0', sim.simx_opmode_oneshot_wait)[1])
+            clientID, 'L0', sim.simx_opmode_blocking)[1])
         link.append(sim.simxGetObjectHandle(
-            clientID, 'L1', sim.simx_opmode_oneshot_wait)[1])
+            clientID, 'L1', sim.simx_opmode_blocking)[1])
         link.append(sim.simxGetObjectHandle(
-            clientID, 'L2', sim.simx_opmode_oneshot_wait)[1])
+            clientID, 'L2', sim.simx_opmode_blocking)[1])
 
         # Gripper
         finger1 = sim.simxGetObjectHandle(
-            clientID, 'Barrett_openCloseJoint0', sim.simx_opmode_oneshot_wait)[1]
+            clientID, 'Barrett_openCloseJoint0', sim.simx_opmode_blocking)[1]
         finger2 = sim.simxGetObjectHandle(
-            clientID, 'Barrett_openCloseJoint', sim.simx_opmode_oneshot_wait)[1]
+            clientID, 'Barrett_openCloseJoint', sim.simx_opmode_blocking)[1]
+
+        #Blades
+        blade = []
+        link.append(sim.simxGetObjectHandle(
+            clientID, 'BladeL', sim.simx_opmode_blocking)[1])
+        link.append(sim.simxGetObjectHandle(
+            clientID, 'BladeR', sim.simx_opmode_blocking)[1])
 
         # Robot
         body = sim.simxGetObjectHandle(
-            clientID, 'Robot', sim.simx_opmode_oneshot_wait)[1]
+            clientID, 'Robot', sim.simx_opmode_blocking)[1]
 
         # PROBABLY DONT NEED ANY OF VARIABLES
         res, resolution, image = sim.simxGetVisionSensorImage(
             clientID, camera, 0, sim.simx_opmode_streaming)
 
-        # path = drone_queue.get()  # If path list is empty, wait to get a response
+        path = drone_queue.get()  # If path list is empty, wait to get a response
         print("Path received...")
         retractArm(clientID, link)
 
@@ -358,9 +398,10 @@ if __name__ == "__main__":
 
             if (robot_state == RobotState.TRAVELLING):
                 result, robot_position = sim.simxGetObjectPosition(
-                    clientID, body, -1, sim.simx_opmode_oneshot)
+                    clientID, body, -1, sim.simx_opmode_blocking)
 
                 if (result == sim.simx_return_ok):
+                    temp_index = robot_path_index
                     robot_path_index, target_orientation = getTargetOrientation(
                         robot_position, path, robot_path_index)
 
@@ -369,22 +410,22 @@ if __name__ == "__main__":
                             clientID, body, target_orientation)
                         speedController(clientID, orientation_error)
                     else:
+                        # Prepare path for returning
+                        del path[temp_index: len(path)]
+                        path.reverse()
+                        path.insert(0, [robot_position[0], robot_position[1]])
                         robot_state = RobotState.RESCUE
                         print("Reached destination...")
                         print("Searching...")
             elif(robot_state == RobotState.RESCUE):
                 arm_state, robot_state = rescueBear(
-                    clientID, link, arm_state, robot_state)
+                    clientID, link, blade, arm_state, robot_state)
             elif(robot_state == RobotState.RETURNING):
                 result, robot_position = sim.simxGetObjectPosition(
-                    clientID, body, -1, sim.simx_opmode_oneshot)
+                    clientID, body, -1, sim.simx_opmode_blocking)
 
                 if (result == sim.simx_return_ok):
                     if (robot_path_index == None):
-                        path.reverse()
-                        nearest_point_index = getNearestPoint(
-                            robot_position, path)
-                        del path[0:nearest_point_index]
                         path.insert(0, [robot_position[0], robot_position[1]])
                         robot_path_index = 0
                     else:
