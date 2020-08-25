@@ -105,7 +105,7 @@ def getBearCenter(clientID, camera):
     res, resolution, image = sim.simxGetVisionSensorImage(
         clientID, camera, 0, sim.simx_opmode_buffer)
 
-    #Camera in Hand
+    # Camera in Hand
     original = np.array(image, dtype=np.uint8)
     original.resize([resolution[0], resolution[1], 3])
     original = cv2.flip(original, 0)
@@ -141,6 +141,7 @@ def getLinksAnglesDegrees(clientID, link):
 
     return L0Angle, L1Angle, L2Angle
 
+
 def getBladesDegrees(clientID, blade):
     LeftBlade = sim.simxGetJointPosition(
         clientID, blade[0], sim.simx_opmode_oneshot_wait)[1]
@@ -148,10 +149,39 @@ def getBladesDegrees(clientID, blade):
         clientID, blade[1], sim.simx_opmode_oneshot_wait)[1]
 
     # Robotic Arm Joints DOF adjusted to 90
-    LeftBlade= np.round(np.rad2deg(LeftBlade), 1)
+    LeftBlade = np.round(np.rad2deg(LeftBlade), 1)
     RightBlade = np.round(np.rad2deg(RightBlade), 1)
 
     return LeftBlade, RightBlade
+
+
+def removeObstacle():
+    LeftBlade, RightBlade = getBladesDegrees(clientID, blade)
+
+    _, isDetected, FrontDistance2, _, _ = sim.simxReadProximitySensor(
+        clientID, FrontDistance, sim.simx_opmode_oneshot_wait)
+    sim.simxSetJointTargetVelocity(
+        clientID, LeftBlade, LeftBladeSpeed, sim.simx_opmode_oneshot)
+    sim.simxSetJointTargetVelocity(
+        clientID, RightBlade, RightBladeSpeed, sim.simx_opmode_oneshot)
+    if (isDetected == True):
+        if (FrontDistance2[0] > 0.0 and LeftBlade < 130):
+            LeftBladeSpeed = 2
+            RightBladeSpeed = 0
+        elif(FrontDistance2[0] < 0.0 and RightBlade > -130):
+            RightBladeSpeed = -2
+            LeftBladeSpeed = 0
+        else:
+            RightBladeSpeed = 0
+            LeftBladeSpeed = 0
+        if RightBlade < 0.0:
+            RightBladeSpeed = 1
+        elif LeftBlade > 0.0:
+            LeftBladeSpeed = -1
+        else:
+            LeftBladeSpeed = 0.0
+            RightBladeSpeed = 0.0
+
 
 def retractArm(clientID, link):
     L0Speed = 0.2
@@ -181,7 +211,7 @@ def rescueBear(clientID, link, blade, arm_state, robot_state):
     rightMotorSpeed = 0
     F1Speed = 0
     F2Speed = 0
-    LeftBladeSpeed= 0
+    LeftBladeSpeed = 0
     RightBladeSpeed = 0
     if (arm_state == ArmState.EXTENT):
         L0Angle = getLinksAnglesDegrees(clientID, link)[0]
@@ -225,32 +255,6 @@ def rescueBear(clientID, link, blade, arm_state, robot_state):
         else:
             leftMotorSpeed = ROBOT_SPEED
             rightMotorSpeed = -ROBOT_SPEED
-    elif(arm_state==ArmState.OBSTACLE):
-        LeftBlade, RightBlade = getBladesDegrees(clientID, blade)
-        
-        _, isDetected, FrontDistance2, _, _ = sim.simxReadProximitySensor(
-            clientID, FrontDistance, sim.simx_opmode_oneshot_wait)
-        sim.simxSetJointTargetVelocity(
-                clientID, LeftBlade, LeftBladeSpeed, sim.simx_opmode_oneshot)
-        sim.simxSetJointTargetVelocity(
-                clientID, RightBlade, RightBladeSpeed, sim.simx_opmode_oneshot)
-        if (isDetected == True):
-            if (FrontDistance2[0]>0.0 and LeftBlade<130):
-                LeftBladeSpeed =2 
-                RightBladeSpeed = 0
-            elif(FrontDistance2[0]<0.0  and RightBlade>-130):
-                RightBladeSpeed = -2
-                LeftBladeSpeed = 0
-            else:
-                RightBladeSpeed = 0
-                LeftBladeSpeed = 0
-            if RightBlade<0.0:
-                RightBladeSpeed = 1
-            elif LeftBlade>0.0:
-                LeftBladeSpeed = -1
-            else:
-                LeftBladeSpeed = 0.0
-                RightBladeSpeed = 0.0
     elif (arm_state == ArmState.GRAB):  # Deploying the arm towards MrYork
         cXHand = getBearCenter(clientID, camera)[0]
 
@@ -344,8 +348,8 @@ if __name__ == "__main__":
             clientID, 'Camera', sim.simx_opmode_blocking)[1]
         distance = sim.simxGetObjectHandle(
             clientID, 'Proximity', sim.simx_opmode_blocking)[1]
-        
-        #Proximity Sensor in front of the chasis
+
+        # Proximity Sensor in front of the chasis
         FrontDistance = sim.simxGetObjectHandle(
             clientID, 'FrontSensor', sim.simx_opmode_oneshot_wait)[1]
 
@@ -370,7 +374,7 @@ if __name__ == "__main__":
         finger2 = sim.simxGetObjectHandle(
             clientID, 'Barrett_openCloseJoint', sim.simx_opmode_blocking)[1]
 
-        #Blades
+        # Blades
         blade = []
         link.append(sim.simxGetObjectHandle(
             clientID, 'BladeL', sim.simx_opmode_blocking)[1])
