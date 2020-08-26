@@ -59,9 +59,9 @@ def getOrientationError(clientID, body, target_orientation):
 
     if (np.abs(orientation_error) > np.pi):
         if (orientation_error < 0):
-            orientation_error = -np.pi
-        else:
             orientation_error = np.pi
+        else:
+            orientation_error = -np.pi
 
     in_min = -np.pi/12.0  # 15 degrees
     in_max = np.pi/12.0
