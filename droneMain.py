@@ -16,6 +16,7 @@ DRONE_START_POS = [-7.5, -7.5, 2.0]
 # Based on an image of 512x512 it has a 19.2 (0.75 units) pixel diameter. We use half (diameter/2), which is the radius
 # Adding 3-4 pixels extra to account for possible error in navigation
 ROBOT_RADIUS_PIXELS = 12
+MANTA_RADIUS_PIXELS = 16  # 1 unit is 25 diameter pixels + (3-4) for safety
 
 # Processes the binary image to account for the size of the ground robot
 
@@ -39,7 +40,7 @@ def proccessToMap(original_image, end_point):
             if (no_tree_mask[i][j] == 255):
                 cv2.circle(no_tree_map, (j, i), ROBOT_RADIUS_PIXELS, 255, -1)
 
-    cv2.circle(no_tree_map, tuple(end_point), ROBOT_RADIUS_PIXELS, 255, -1)
+    cv2.circle(no_tree_map, tuple(end_point), MANTA_RADIUS_PIXELS, 255, -1)
     return no_tree_map | green_mask
 
 # Converts the pixel coordinates from the map to world coordinates for the robots
@@ -101,7 +102,7 @@ def getCarPixelCentre(original):
 
 
 def fixPostProcessPoints(map, point):
-    check_radius = ROBOT_RADIUS_PIXELS + 5
+    check_radius = MANTA_RADIUS_PIXELS + 5
     i = point[0]
     j = point[1]
     if (map[i][j] == 255):
