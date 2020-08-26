@@ -281,35 +281,43 @@ def rescueBear(clientID, leftMotor, rightMotor, finger1, finger2, link, blade, F
             leftMotorSpeed = ROBOT_SPEED
             rightMotorSpeed = -ROBOT_SPEED
     elif (arm_state == ArmState.GRAB):  # Deploying the arm towards MrYork
-        cXHand = getBearCenter(clientID, camera)[0]
+        _, isDetected, proximity2, _, _ = sim.simxReadProximitySensor(
+            clientID, distance, sim.simx_opmode_blocking)
 
-        if (cXHand != None):
-            gain = 1.0
-            errorX = changeScale(cXHand, 0.0, 256.0, -1.0, 1.0)
+        if (isDetected):
+            if (proximity2[2] > 0.03):
+                leftMotorSpeed = ROBOT_SPEED*proximity2[2]
+                rightMotorSpeed = ROBOT_SPEED*proximity2[2]
+            else:
+                sim.simxSetJointTargetVelocity(
+                    clientID, leftMotor, leftMotorSpeed, sim.simx_opmode_oneshot)
+                sim.simxSetJointTargetVelocity(
+                    clientID, rightMotor, rightMotorSpeed, sim.simx_opmode_oneshot)
 
-            _, isDetected, proximity2, _, _ = sim.simxReadProximitySensor(
-                clientID, distance, sim.simx_opmode_blocking)
-
-            leftMotorSpeed = ROBOT_SPEED - (gain*errorX)
-            rightMotorSpeed = ROBOT_SPEED + (gain*errorX)
-            if (isDetected == True):
-                if (proximity2[2] > 0.03):
-                    leftMotorSpeed = ROBOT_SPEED*proximity2[2]
-                    rightMotorSpeed = ROBOT_SPEED*proximity2[2]
-                else:
-                    F1Speed = -0.1
-                    F2Speed = -0.1
-                    sim.simxSetJointTargetVelocity(
-                        clientID, finger1, F1Speed, sim.simx_opmode_oneshot)
-                    sim.simxSetJointTargetVelocity(
-                        clientID, finger2, F2Speed, sim.simx_opmode_oneshot)
-                    # Wait for 5 seconds for fingers to close, while slowly moving forward
-                    time.sleep(5)
-                    arm_state = ArmState.RETRACT
-                    print("Bear grabbed and retracting...")
+                F1Speed = -0.1
+                F2Speed = -0.1
+                sim.simxSetJointTargetVelocity(
+                    clientID, finger1, F1Speed, sim.simx_opmode_oneshot)
+                sim.simxSetJointTargetVelocity(
+                    clientID, finger2, F2Speed, sim.simx_opmode_oneshot)
+                # Wait for 5 seconds for fingers to close, while slowly moving forward
+                time.sleep(5)
+                arm_state = ArmState.RETRACT
+                print("Bear grabbed and retracting...")
         else:
-            leftMotorSpeed = ROBOT_SPEED
-            rightMotorSpeed = -ROBOT_SPEED
+            cXHand = getBearCenter(clientID, camera)[0]
+
+            if (cXHand != None):
+                errorX = changeScale(cXHand, 0.0, 255.0, -1.0, 1.0)
+
+                _, isDetected, proximity2, _, _ = sim.simxReadProximitySensor(
+                    clientID, distance, sim.simx_opmode_blocking)
+
+                leftMotorSpeed = ROBOT_SPEED - (CONTROLLER_GAIN*errorX)
+                rightMotorSpeed = ROBOT_SPEED + (CONTROLLER_GAIN*errorX)
+            else:
+                leftMotorSpeed = ROBOT_SPEED
+                rightMotorSpeed = -ROBOT_SPEED
     # Folding the arm back to the car with Mr York grabbed
     elif (arm_state == ArmState.RETRACT):
         L0Angle, L1Angle, L2Angle = getLinksAnglesDegrees(clientID, link)
