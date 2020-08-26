@@ -26,31 +26,28 @@ class ArmState(Enum):
 # Program Constants
 SIMULATION_STEP = 50.0  # in milliseconds
 PATH_POINT_ERROR_RADIUS = 0.3  # in coppelia units
-ROBOT_SPEED = -0.5
-CONTROLLER_GAIN = 4.0
+ROBOT_SPEED = -2.5
+CONTROLLER_GAIN = 1.0
 
 
 def speedController(clientID, error):
 
-    delta = CONTROLLER_GAIN*error
-
-    leftMotorSpeed = ROBOT_SPEED - delta
-    rightMotorSpeed = ROBOT_SPEED + delta
-
-    if (leftMotorSpeed > 1.0):
-        leftMotorSpeed = 1.0
-    elif (leftMotorSpeed < -1.0):
-        leftMotorSpeed = -1
-
-    if (rightMotorSpeed > 1.0):
-        rightMotorSpeed = 1.0
-    elif (rightMotorSpeed < -1.0):
-        rightMotorSpeed = -1
+    if (abs(error) > 1.0):
+        if (error > 0):
+            leftMotorSpeed = ROBOT_SPEED
+            rightMotorSpeed = -ROBOT_SPEED
+        else:
+            leftMotorSpeed = -ROBOT_SPEED
+            rightMotorSpeed = ROBOT_SPEED
+    else:
+        delta = CONTROLLER_GAIN*error
+        leftMotorSpeed = ROBOT_SPEED - delta
+        rightMotorSpeed = ROBOT_SPEED + delta
 
     sim.simxSetJointTargetVelocity(
-        clientID, leftMotor, 4*leftMotorSpeed, sim.simx_opmode_oneshot)
+        clientID, leftMotor, leftMotorSpeed, sim.simx_opmode_oneshot)
     sim.simxSetJointTargetVelocity(
-        clientID, rightMotor, 4*rightMotorSpeed, sim.simx_opmode_oneshot)
+        clientID, rightMotor, rightMotorSpeed, sim.simx_opmode_oneshot)
 
 
 def getOrientationError(clientID, body, target_orientation):
@@ -66,18 +63,13 @@ def getOrientationError(clientID, body, target_orientation):
         else:
             orientation_error = np.pi
 
-    in_min = -np.pi/4.0
-    in_max = np.pi/4.0
+    in_min = -np.pi/12.0  # 15 degrees
+    in_max = np.pi/12.0
     out_min = -1.0
     out_max = 1.0
 
     error = (orientation_error - in_min) * \
         (out_max - out_min) / (in_max - in_min) + out_min
-
-    if (error > out_max):
-        error = out_max
-    elif (error < out_min):
-        error = out_min
     return error
 
 
