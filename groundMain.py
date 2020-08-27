@@ -25,8 +25,8 @@ class ArmState(Enum):
 
 # Program Constants
 SIMULATION_STEP = 50.0  # in milliseconds
-PATH_POINT_ERROR_RADIUS = 0.3  # in coppelia units
-ROBOT_SPEED = -2.5
+PATH_POINT_ERROR_RADIUS = 0.2  # in coppelia units
+ROBOT_SPEED = -6.0
 CONTROLLER_GAIN = 1.0
 
 
@@ -34,11 +34,11 @@ def speedController(clientID, error):
 
     if (abs(error) > 1.0):
         if (error > 0):
-            leftMotorSpeed = ROBOT_SPEED
-            rightMotorSpeed = -ROBOT_SPEED
+            leftMotorSpeed = ROBOT_SPEED / 2.0
+            rightMotorSpeed = -ROBOT_SPEED / 2.0
         else:
-            leftMotorSpeed = -ROBOT_SPEED
-            rightMotorSpeed = ROBOT_SPEED
+            leftMotorSpeed = -ROBOT_SPEED / 2.0
+            rightMotorSpeed = ROBOT_SPEED / 2.0
     else:
         delta = CONTROLLER_GAIN*error
         leftMotorSpeed = ROBOT_SPEED - delta
@@ -77,7 +77,7 @@ def getTargetOrientation(robot_position, path, robot_path_index):
     current_point = path[robot_path_index]
 
     # If the robot is within 0.75 units radius of the red car (last path point)
-    if (np.sqrt(((path[len(path) - 1][0] - robot_position[0]) ** 2.0) + ((path[len(path) - 1][1] - robot_position[1]) ** 2.0)) <= 0.75):
+    if (np.sqrt(((path[len(path) - 1][0] - robot_position[0]) ** 2.0) + ((path[len(path) - 1][1] - robot_position[1]) ** 2.0)) <= 1.0):
         return None, None
 
     # Else if there are more points available (we are not at the end)
@@ -278,8 +278,8 @@ def rescueBear(clientID, leftMotor, rightMotor, finger1, finger2, link, blade, F
             arm_state = ArmState.GRAB
             print("Preparing to grab...")
         else:
-            leftMotorSpeed = ROBOT_SPEED
-            rightMotorSpeed = -ROBOT_SPEED
+            leftMotorSpeed = ROBOT_SPEED / 2.0
+            rightMotorSpeed = -ROBOT_SPEED / 2.0
     elif (arm_state == ArmState.GRAB):  # Deploying the arm towards MrYork
         _, isDetected, proximity2, _, _ = sim.simxReadProximitySensor(
             clientID, distance, sim.simx_opmode_blocking)
@@ -316,8 +316,8 @@ def rescueBear(clientID, leftMotor, rightMotor, finger1, finger2, link, blade, F
                 leftMotorSpeed = ROBOT_SPEED - (CONTROLLER_GAIN*errorX)
                 rightMotorSpeed = ROBOT_SPEED + (CONTROLLER_GAIN*errorX)
             else:
-                leftMotorSpeed = ROBOT_SPEED
-                rightMotorSpeed = -ROBOT_SPEED
+                leftMotorSpeed = ROBOT_SPEED / 2.0
+                rightMotorSpeed = -ROBOT_SPEED / 2.0
     # Folding the arm back to the car with Mr York grabbed
     elif (arm_state == ArmState.RETRACT):
         L0Angle, L1Angle, L2Angle = getLinksAnglesDegrees(clientID, link)
