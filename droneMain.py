@@ -192,7 +192,6 @@ def main(drone_queue):
     end_point = [None, None]
 
     # Start Program and just in case, close all opened connections
-    print('Program started...')
     sim.simxFinish(-1)
 
     # Connect to simulator running on localhost
@@ -201,23 +200,17 @@ def main(drone_queue):
 
     # Connect to the simulation
     if clientID != -1:
-        print('Connected to remote API server...')
-        print('Obtaining handles of simulation objects...')
+        print('Drone connected to remote API server...')
 
         # Target object for drone navigation
-        res, drone_target = sim.simxGetObjectHandle(
-            clientID, 'DroneTarget', sim.simx_opmode_oneshot_wait)
-        if res != sim.simx_return_ok:
-            print('Could not get handle to quadcopter target object...')
+        drone_target = sim.simxGetObjectHandle(
+            clientID, 'DroneTarget', sim.simx_opmode_blocking)[1]
 
         # Bottom drone camera
-        res, drone_camera = sim.simxGetObjectHandle(
-            clientID, 'DroneFloorCamera', sim.simx_opmode_oneshot_wait)
-        if res != sim.simx_return_ok:
-            print('Could not get handle to drone camera object...')
+        drone_camera = sim.simxGetObjectHandle(
+            clientID, 'DroneFloorCamera', sim.simx_opmode_blocking)[1]
 
         # Start main control loop
-        print('Starting control loop...')
         res, resolution, image = sim.simxGetVisionSensorImage(
             clientID, drone_camera, 0, sim.simx_opmode_streaming)
 
@@ -333,7 +326,6 @@ def main(drone_queue):
         cv2.destroyAllWindows()
     else:
         print('Failed connecting to remote API server...')
-    print('Drone simulation has ended...')
 
 
 if __name__ == "__main__":
