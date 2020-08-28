@@ -13,9 +13,9 @@ SCR_HEIGHT = 512
 SIMULATION_STEP = 50.0  # in milliseconds
 DRONE_GOAL_POS = [0.0, 0.0, 8.0]
 DRONE_START_POS = [-7.5, -7.5, 2.0]
-# Based on an image of 512x512 it has a 19.2 (0.75 units) pixel diameter. We use half (diameter/2), which is the radius
+# Based on an image of 512x512 it has a 28.16 (1.1 units diagonal) pixel diameter. We use half (diameter/2), which is the radius
 # Adding 2 pixels extra to account for possible error in navigation
-ROBOT_RADIUS_PIXELS = 12
+ROBOT_RADIUS_PIXELS = 16
 MANTA_RADIUS_PIXELS = 14  # 1 unit is 25 diameter pixels (+1 for safety)
 
 # Processes the binary image to account for the size of the ground robot

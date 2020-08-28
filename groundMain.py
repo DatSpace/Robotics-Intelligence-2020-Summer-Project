@@ -34,11 +34,11 @@ def speedController(clientID, error):
 
     if (abs(error) > 1.0):
         if (error > 0):
-            leftMotorSpeed = ROBOT_SPEED / 2.0
-            rightMotorSpeed = -ROBOT_SPEED / 2.0
+            leftMotorSpeed = ROBOT_SPEED / 3.0
+            rightMotorSpeed = -ROBOT_SPEED / 3.0
         else:
-            leftMotorSpeed = -ROBOT_SPEED / 2.0
-            rightMotorSpeed = ROBOT_SPEED / 2.0
+            leftMotorSpeed = -ROBOT_SPEED / 3.0
+            rightMotorSpeed = ROBOT_SPEED / 3.0
     else:
         delta = CONTROLLER_GAIN*error
         leftMotorSpeed = ROBOT_SPEED - delta
@@ -94,7 +94,7 @@ def getTargetOrientation(robot_position, path, robot_path_index):
 
 
 def getBearCenter(clientID, camera):
-    res, resolution, image = sim.simxGetVisionSensorImage(
+    _, resolution, image = sim.simxGetVisionSensorImage(
         clientID, camera, 0, sim.simx_opmode_buffer)
 
     # Camera in Hand
@@ -103,8 +103,7 @@ def getBearCenter(clientID, camera):
     original = cv2.flip(original, 0)
     hsv = cv2.cvtColor(original, cv2.COLOR_RGB2HSV)
 
-    green = cv2.inRange(hsv, np.array(
-        [45, 254, 0]), np.array([64, 255, 255]))
+    green = cv2.inRange(hsv, np.array([45, 254, 0]), np.array([64, 255, 255]))
 
     # Moments in the hand
     MHand = cv2.moments(green)
@@ -223,7 +222,7 @@ def changeScale(point, in_min, in_max, out_min, out_max):
     return (point - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
 
-def rescueBear(clientID, leftMotor, rightMotor, finger1, finger2, link, blade, FrontDistance, arm_state, robot_state):
+def rescueBear(clientID, camera, leftMotor, rightMotor, finger1, finger2, link, blade, FrontDistance, arm_state, robot_state):
     L0Speed = 0
     L1Speed = 0
     L2Speed = 0
@@ -278,16 +277,16 @@ def rescueBear(clientID, leftMotor, rightMotor, finger1, finger2, link, blade, F
             arm_state = ArmState.GRAB
             print("Preparing to grab...")
         else:
-            leftMotorSpeed = ROBOT_SPEED / 2.0
-            rightMotorSpeed = -ROBOT_SPEED / 2.0
+            leftMotorSpeed = ROBOT_SPEED / 3.0
+            rightMotorSpeed = -ROBOT_SPEED / 3.0
     elif (arm_state == ArmState.GRAB):  # Deploying the arm towards MrYork
         _, isDetected, proximity2, _, _ = sim.simxReadProximitySensor(
             clientID, distance, sim.simx_opmode_blocking)
 
         if (isDetected):
             if (proximity2[2] > 0.03):
-                leftMotorSpeed = ROBOT_SPEED*proximity2[2]
-                rightMotorSpeed = ROBOT_SPEED*proximity2[2]
+                leftMotorSpeed = (ROBOT_SPEED / 3.0) * proximity2[2]
+                rightMotorSpeed = (ROBOT_SPEED / 3.0) * proximity2[2]
             else:
                 sim.simxSetJointTargetVelocity(
                     clientID, leftMotor, leftMotorSpeed, sim.simx_opmode_oneshot)
@@ -316,8 +315,8 @@ def rescueBear(clientID, leftMotor, rightMotor, finger1, finger2, link, blade, F
                 leftMotorSpeed = ROBOT_SPEED - (CONTROLLER_GAIN*errorX)
                 rightMotorSpeed = ROBOT_SPEED + (CONTROLLER_GAIN*errorX)
             else:
-                leftMotorSpeed = ROBOT_SPEED / 2.0
-                rightMotorSpeed = -ROBOT_SPEED / 2.0
+                leftMotorSpeed = ROBOT_SPEED / 3.0
+                rightMotorSpeed = -ROBOT_SPEED / 3.0
     # Folding the arm back to the car with Mr York grabbed
     elif (arm_state == ArmState.RETRACT):
         L0Angle, L1Angle, L2Angle = getLinksAnglesDegrees(clientID, link)
@@ -456,7 +455,7 @@ if __name__ == "__main__":
                         print("Searching...")
             elif(robot_state == RobotState.RESCUE):
                 arm_state, robot_state = rescueBear(
-                    clientID, leftMotor, rightMotor, finger1, finger2, link, blade, FrontDistance, arm_state, robot_state)
+                    clientID, camera, leftMotor, rightMotor, finger1, finger2, link, blade, FrontDistance, arm_state, robot_state)
             elif(robot_state == RobotState.RETURNING):
                 result, robot_position = sim.simxGetObjectPosition(
                     clientID, body, -1, sim.simx_opmode_blocking)
