@@ -16,7 +16,7 @@ DRONE_START_POS = [-7.5, -7.5, 2.0]
 # Based on an image of 512x512 it has a 19.2 (0.75 units) pixel diameter. We use half (diameter/2), which is the radius
 # Adding 2 pixels extra to account for possible error in navigation
 ROBOT_RADIUS_PIXELS = 12
-MANTA_RADIUS_PIXELS = 16  # 1 unit is 25 diameter pixels (+3 for safety)
+MANTA_RADIUS_PIXELS = 14  # 1 unit is 25 diameter pixels (+1 for safety)
 
 # Processes the binary image to account for the size of the ground robot
 
@@ -37,8 +37,8 @@ def proccessToMap(original_image, end_point):
 
     for i in range(SCR_WIDTH):
         for j in range(SCR_HEIGHT):
-            if (no_tree_mask[i][j] == 255):
-                cv2.circle(no_tree_map, (j, i), ROBOT_RADIUS_PIXELS, 255, -1)
+            if (no_tree_mask[j][i] == 255):
+                cv2.circle(no_tree_map, (i, j), ROBOT_RADIUS_PIXELS, 255, -1)
 
     cv2.circle(no_tree_map, tuple(end_point), MANTA_RADIUS_PIXELS, 255, -1)
     return no_tree_map | green_mask
@@ -101,18 +101,18 @@ def getCarPixelCentre(original):
         return None
 
 
-def fixPostProcessPoints(map, point):
-    check_radius = MANTA_RADIUS_PIXELS + 5
+def fixPostProcessPoints(proccessed_map, point):
+    check_radius = MANTA_RADIUS_PIXELS + 1
     i = point[0]
     j = point[1]
-    if (map[i][j] == 255):
+    if (proccessed_map[j][i] == 255):
         for k in range(-check_radius, check_radius + 1):
             x = i + k
             for l in range(-check_radius, check_radius + 1):
                 y = j + l
                 if (x >= 0 and y >= 0 and x < SCR_WIDTH and y < SCR_HEIGHT):
-                    if ((k ** 2.0) + (l ** 2.0) <= check_radius ** 2.0):
-                        if (map[x][y] == 0):
+                    if (proccessed_map[y][x] == 0):
+                        if ((k ** 2.0) + (l ** 2.0) <= check_radius ** 2.0):
                             return [x, y]
     return point
 
@@ -220,7 +220,7 @@ def main(drone_queue):
                 clientID, drone_target, -1, sim.simx_opmode_blocking)
 
             if (drone_target_res is sim.simx_return_ok):
-                start_point = changePointScale([drone_target_position[0], drone_target_position[1]], [
+                start_point = changePointScale([drone_target_position[1], drone_target_position[0]], [
                     10.0, 10.0], [-10.0, -10.0], [0.0, 0.0], [SCR_WIDTH, SCR_HEIGHT])
                 start_point = [round(x) for x in start_point]
                 break
@@ -294,7 +294,7 @@ def main(drone_queue):
                 cv2.circle(drawn_map, tuple(point), 2, (0, 255, 0), -1)
                 # Flip point because of current camera orientation and coppelia coordinate system
                 path_coord.append(changePointScale([point[1], point[0]], [
-                                  0, 0], [512, 512], [10, 10], [-10, -10]))
+                                  0, 0], [SCR_WIDTH, SCR_HEIGHT], [10, 10], [-10, -10]))
         else:
             print("Could not get an end point...")
 
