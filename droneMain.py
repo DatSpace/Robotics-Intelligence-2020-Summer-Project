@@ -21,7 +21,7 @@ MANTA_RADIUS_PIXELS = 14  # 1 unit is 25 diameter pixels (+1 for safety)
 # Processes the binary image to account for the size of the ground robot
 
 
-def proccessToMap(original_image, end_point):
+def proccessToMap(original_image, teddy_location, red_car_location):
     print("Started processing of image...")
     hsv = cv2.cvtColor(original_image, cv2.COLOR_BGR2HSV)
 
@@ -40,7 +40,11 @@ def proccessToMap(original_image, end_point):
             if (no_tree_mask[j][i] == 255):
                 cv2.circle(no_tree_map, (i, j), ROBOT_RADIUS_PIXELS, 255, -1)
 
-    cv2.circle(no_tree_map, tuple(end_point), MANTA_RADIUS_PIXELS, 255, -1)
+    if (teddy_location != None):
+        cv2.circle(no_tree_map, tuple(teddy_location), 6, 255, -1)
+    if (red_car_location != None):
+        cv2.circle(no_tree_map, tuple(red_car_location),
+                   MANTA_RADIUS_PIXELS, 255, -1)
     return no_tree_map | green_mask
 
 # Converts the pixel coordinates from the map to world coordinates for the robots
@@ -256,18 +260,16 @@ def main(drone_queue):
         original_image = cv2.cvtColor(
             original_image, cv2.COLOR_RGB2BGR)
 
-        teddy_location = getTeddyPixelCentre(
-            original_image)
+        teddy_location = getTeddyPixelCentre(original_image)
+        red_car_location = getCarPixelCentre(original_image)
 
         if (teddy_location != None):
             end_point = teddy_location
-        else:
-            red_car_location = getCarPixelCentre(
-                original_image)
-            if (red_car_location != None):
-                end_point = red_car_location
+        elif (red_car_location != None):
+            end_point = red_car_location
 
-        final_map = proccessToMap(original_image, end_point)
+        final_map = proccessToMap(
+            original_image, teddy_location, red_car_location)
 
         if (end_point[0] != None):
             # If the end point is covered by a wall (after processing)
