@@ -27,9 +27,9 @@ def proccessToMap(original_image, teddy_location, red_car_location):
 
     green_mask = cv2.inRange(hsv, (45, 0, 0), (65, 255, 255))
     white_mask = cv2.inRange(hsv, (0, 0, 253), (0, 0, 255))
-    concrete_mask = cv2.inRange(hsv, (15, 15, 185), (25, 64, 195))
+    concrete_mask = cv2.inRange(hsv, (0, 0, 200), (2, 0, 202))
 
-    concrete_mask = cv2.fastNlMeansDenoising(concrete_mask, None, 40)
+    #concrete_mask = cv2.fastNlMeansDenoising(concrete_mask, None, 40)
 
     no_tree_mask = white_mask | concrete_mask
 
