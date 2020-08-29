@@ -233,10 +233,11 @@ def rescueBear(clientID, camera, leftMotor, rightMotor, finger1, finger2, link, 
     if (arm_state == ArmState.EXTENT):
         L0Angle = getLinksAnglesDegrees(clientID, link)[0]
         L2Angle = getLinksAnglesDegrees(clientID, link)[2]
-        if L0Angle > 0:
-            L0Speed = -0.2
-        elif L2Angle < 35:
-            L2Speed = 0.2
+        if ((L2Angle < 35) or (L0Angle > 0)):
+            if L2Angle < 35:
+                L2Speed = 0.2
+            if L0Angle > 0:
+                L0Speed = -0.2
         else:
             arm_state = ArmState.SEARCH
             print("Searching for bear...")
@@ -308,9 +309,6 @@ def rescueBear(clientID, camera, leftMotor, rightMotor, finger1, finger2, link, 
 
             if (cXHand != None):
                 errorX = changeScale(cXHand, 0.0, 255.0, -1.0, 1.0)
-
-                _, isDetected, proximity2, _, _ = sim.simxReadProximitySensor(
-                    clientID, distance, sim.simx_opmode_blocking)
 
                 leftMotorSpeed = ROBOT_SPEED - (CONTROLLER_GAIN*errorX)
                 rightMotorSpeed = ROBOT_SPEED + (CONTROLLER_GAIN*errorX)
