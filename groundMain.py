@@ -25,7 +25,8 @@ class ArmState(Enum):
 
 # Program Constants
 SIMULATION_STEP = 50.0  # in milliseconds
-PATH_POINT_ERROR_RADIUS = 0.2  # in coppelia units
+# in coppelia units (Allows for an error of 0.2 on both x AND y)
+PATH_POINT_ERROR_RADIUS = 0.3
 ROBOT_SPEED = -6.0
 CONTROLLER_GAIN = 1.0
 
@@ -76,21 +77,14 @@ def getOrientationError(clientID, body, target_orientation):
 def getTargetOrientation(robot_position, path, robot_path_index):
     current_point = path[robot_path_index]
 
-    # If the robot is within 0.75 units radius of the red car (last path point)
-    if (np.sqrt(((path[len(path) - 1][0] - robot_position[0]) ** 2.0) + ((path[len(path) - 1][1] - robot_position[1]) ** 2.0)) <= 1.0):
-        return None, None
-
-    # Else if there are more points available (we are not at the end)
-    elif (robot_path_index + 1 < len(path)):
+    if (robot_path_index + 1 < len(path)):
         next_point = path[robot_path_index + 1]
         if (np.sqrt(((next_point[0] - robot_position[0]) ** 2.0) + ((next_point[1] - robot_position[1]) ** 2.0)) <= PATH_POINT_ERROR_RADIUS):
             robot_path_index += 1
-
         # Angle of the two points in radians
         return robot_path_index, np.arctan2(next_point[1] - current_point[1], next_point[0] - current_point[0])
-    # If there are no points available, which means that we are the end, but the first if didnt trigger (which means the car believes it is at the end, but it is not)
     else:
-        print("If I was printed, something went terribly wrong!")
+        return None, None
 
 
 def getBearCenter(clientID, camera):
