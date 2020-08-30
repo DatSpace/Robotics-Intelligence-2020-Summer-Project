@@ -13,10 +13,11 @@ SCR_HEIGHT = 512
 SIMULATION_STEP = 50.0  # in milliseconds
 DRONE_GOAL_POS = [0.0, 0.0, 8.0]
 DRONE_START_POS = [-7.5, -7.5, 2.0]
-# Based on an image of 512x512 it has a 28.16 (1.1 units diagonal) pixel diameter. We use half (diameter/2), which is the radius
-# Adding 2 pixels extra to account for possible error in navigation
+# Based on an image of 512x512 it has a 28.2 (1.1 units diagonal) pixel diameter. We use half (diameter/2), which is the radius
+# Adding 3 pixels extra to account for possible error in navigation
 ROBOT_RADIUS_PIXELS = 16
-MANTA_RADIUS_PIXELS = 14  # 1 unit is 25 diameter pixels (+1 for safety)
+MANTA_RADIUS_PIXELS = 11  # 0.8 unit is 20.5 diameter pixels (+1 for safety)
+BEAR_RADIUS_PIXELS = 4  # 0.25 units are 6.4 in diameter pixels (+1 for safety)
 
 # Processes the binary image to account for the size of the ground robot
 
@@ -33,18 +34,19 @@ def proccessToMap(original_image, teddy_location, red_car_location):
 
     no_tree_mask = white_mask | concrete_mask
 
+    if (teddy_location != None):
+        cv2.circle(no_tree_mask, tuple(teddy_location),
+                   BEAR_RADIUS_PIXELS6, 255, -1)
+    if (red_car_location != None):
+        cv2.circle(no_tree_mask, tuple(red_car_location),
+                   MANTA_RADIUS_PIXELS, 255, -1)
+
     no_tree_map = np.copy(no_tree_mask)
 
     for i in range(SCR_WIDTH):
         for j in range(SCR_HEIGHT):
             if (no_tree_mask[j][i] == 255):
                 cv2.circle(no_tree_map, (i, j), ROBOT_RADIUS_PIXELS, 255, -1)
-
-    if (teddy_location != None):
-        cv2.circle(no_tree_map, tuple(teddy_location), 6, 255, -1)
-    if (red_car_location != None):
-        cv2.circle(no_tree_map, tuple(red_car_location),
-                   MANTA_RADIUS_PIXELS, 255, -1)
     return no_tree_map | green_mask
 
 # Converts the pixel coordinates from the map to world coordinates for the robots
@@ -106,7 +108,7 @@ def getCarPixelCentre(original):
 
 
 def fixPostProcessPoints(proccessed_map, point):
-    check_radius = MANTA_RADIUS_PIXELS + 1
+    check_radius = ROBOT_RADIUS_PIXELS + MANTA_RADIUS_PIXELS + 1
     i = point[0]
     j = point[1]
     if (proccessed_map[j][i] == 255):
@@ -116,7 +118,7 @@ def fixPostProcessPoints(proccessed_map, point):
                 y = j + l
                 if (x >= 0 and y >= 0 and x < SCR_WIDTH and y < SCR_HEIGHT):
                     if (proccessed_map[y][x] == 0):
-                        if ((k ** 2.0) + (l ** 2.0) <= check_radius ** 2.0):
+                        if ((k ** 2.0) + (l ** 2.0) <= (check_radius ** 2.0)):
                             return [x, y]
     return point
 
