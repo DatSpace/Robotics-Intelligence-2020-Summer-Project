@@ -36,7 +36,7 @@ def proccessToMap(original_image, teddy_location, red_car_location):
 
     if (teddy_location != None):
         cv2.circle(no_tree_mask, tuple(teddy_location),
-                   BEAR_RADIUS_PIXELS6, 255, -1)
+                   BEAR_RADIUS_PIXELS, 255, -1)
     if (red_car_location != None):
         cv2.circle(no_tree_mask, tuple(red_car_location),
                    MANTA_RADIUS_PIXELS, 255, -1)
