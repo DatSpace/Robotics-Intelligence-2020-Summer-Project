@@ -31,7 +31,38 @@ ROBOT_SPEED = -6.0
 CONTROLLER_GAIN = 1.0
 
 
-def speedController(clientID, error):
+def emergencyMovement(clientID, key_pressed, leftMotor, rightMotor):
+    valid_key = False
+
+    if (key_pressed == ord('w')):
+        leftMotorSpeed = -0.5
+        rightMotorSpeed = -0.5
+        valid_key = True
+    elif (key_pressed == ord('s')):
+        leftMotorSpeed = 0.5
+        rightMotorSpeed = 0.5
+        valid_key = True
+    elif (key_pressed == ord('a')):
+        leftMotorSpeed = 0.5
+        rightMotorSpeed = -0.5
+        valid_key = True
+    elif (key_pressed == ord('d')):
+        leftMotorSpeed = -0.5
+        rightMotorSpeed = 0.5
+        valid_key = True
+    elif (key_pressed == ord(' ')):
+        leftMotorSpeed = 0.0
+        rightMotorSpeed = 0.0
+        valid_key = True
+
+    if (valid_key):
+        sim.simxSetJointTargetVelocity(
+            clientID, leftMotor, leftMotorSpeed, sim.simx_opmode_oneshot)
+        sim.simxSetJointTargetVelocity(
+            clientID, rightMotor, rightMotorSpeed, sim.simx_opmode_oneshot)
+
+
+def speedController(clientID, leftMotor, rightMotor, error):
 
     if (abs(error) > 1.0):
         if (error > 0):
@@ -415,6 +446,8 @@ if __name__ == "__main__":
 
         retractArm(clientID, link)
         path = drone_queue.get()  # If path list is empty, wait to get a response
+        drawn_map = drone_queue.get()
+        cv2.imshow("Map", drawn_map)
         print("Path received...")
 
         # Start main control loop
@@ -436,7 +469,8 @@ if __name__ == "__main__":
                     if (robot_path_index != None):
                         orientation_error = getOrientationError(
                             clientID, body, target_orientation)
-                        speedController(clientID, orientation_error)
+                        speedController(clientID, leftMotor,
+                                        rightMotor, orientation_error)
                     else:
                         # Prepare path for returning
                         del path[temp_index: len(path)]
@@ -463,8 +497,8 @@ if __name__ == "__main__":
                         if (robot_path_index != None):
                             orientation_error = getOrientationError(
                                 clientID, body, target_orientation)
-                            speedController(
-                                clientID, orientation_error)
+                            speedController(clientID, leftMotor,
+                                            rightMotor, orientation_error)
                         else:
                             print("The patient has been safely returned...")
                             sim.simxSetJointTargetVelocity(
@@ -472,6 +506,9 @@ if __name__ == "__main__":
                             sim.simxSetJointTargetVelocity(
                                 clientID, rightMotor, 0.0, sim.simx_opmode_oneshot)
                             break
+
+            key_pressed = cv2.waitKey(1) & 0xFF
+            emergencyMovement(clientID, key_pressed, leftMotor, rightMotor)
 
             end_ms = int(round(time.time() * 1000))
             dt_ms = end_ms - start_ms

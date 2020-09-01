@@ -17,7 +17,8 @@ DRONE_START_POS = [-7.5, -7.5, 2.0]
 # Adding 3 pixels extra to account for possible error in navigation
 ROBOT_RADIUS_PIXELS = 16
 MANTA_RADIUS_PIXELS = 11  # 0.8 unit is 20.5 diameter pixels (+1 for safety)
-BEAR_RADIUS_PIXELS = 4  # 0.25 units are 6.4 in diameter pixels (+1 for safety)
+# 0.25 units are 6.4 in diameter pixels. We measure the bear as 1 unit (25.6 pixels), to account for the possibility of the ground robot driving directly there, and leaving space for the gripper.
+BEAR_RADIUS_PIXELS = 13
 
 # Processes the binary image to account for the size of the ground robot
 
@@ -93,8 +94,12 @@ def getCarPixelCentre(original):
         return None
 
 
-def fixPostProcessPoints(proccessed_map, point):
-    check_radius = ROBOT_RADIUS_PIXELS + MANTA_RADIUS_PIXELS + 1
+def fixPostProcessPoints(proccessed_map, point, isBear):
+    # Using the robot radius as it is the largest of all and gurantees to be larger than the circle drawn.
+    if (isBear):
+        check_radius = ROBOT_RADIUS_PIXELS + BEAR_RADIUS_PIXELS + 1
+    else:
+        check_radius = ROBOT_RADIUS_PIXELS + MANTA_RADIUS_PIXELS + 1
     i = point[0]
     j = point[1]
     if (proccessed_map[j][i] == 255):
@@ -251,8 +256,10 @@ def main(drone_queue):
         teddy_location = getTeddyPixelCentre(original_image)
         red_car_location = getCarPixelCentre(original_image)
 
+        isBear = False
         if (teddy_location != None):
             end_point = teddy_location
+            isBear = True
         elif (red_car_location != None):
             end_point = red_car_location
 
@@ -262,9 +269,9 @@ def main(drone_queue):
         if (end_point[0] != None):
             # If the end point is covered by a wall (after processing)
             end_point = fixPostProcessPoints(
-                final_map, end_point)
+                final_map, end_point, isBear)
             start_point = fixPostProcessPoints(
-                final_map, start_point)
+                final_map, start_point, False)
 
             print("Starting pathfinding attempts...")
             path = None
@@ -291,9 +298,7 @@ def main(drone_queue):
         if (drone_queue != None):
             print("Sending path to Ground Robot...")
             drone_queue.put(path_coord)
-
-        cv2.imshow("Map", drawn_map)
-        cv2.waitKey(0)
+            drone_queue.put(drawn_map)
 
         while (sim.simxGetConnectionId(clientID) != -1):
             start_ms = int(round(time.time() * 1000))
