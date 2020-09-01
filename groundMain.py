@@ -35,11 +35,11 @@ def speedController(clientID, error):
 
     if (abs(error) > 1.0):
         if (error > 0):
-            leftMotorSpeed = ROBOT_SPEED / 3.0
-            rightMotorSpeed = -ROBOT_SPEED / 3.0
+            leftMotorSpeed = ROBOT_SPEED / 2.0
+            rightMotorSpeed = -ROBOT_SPEED / 2.0
         else:
-            leftMotorSpeed = -ROBOT_SPEED / 3.0
-            rightMotorSpeed = ROBOT_SPEED / 3.0
+            leftMotorSpeed = -ROBOT_SPEED / 2.0
+            rightMotorSpeed = ROBOT_SPEED / 2.0
     else:
         delta = CONTROLLER_GAIN*error
         leftMotorSpeed = ROBOT_SPEED - delta
@@ -149,7 +149,7 @@ def removeObstacle(clientID, blade, FrontDistance):
         start_time = int(time.time())
 
         if (distance[0] > 0.0):
-            LeftBladeSpeed = 2
+            LeftBladeSpeed = 2.0
             sim.simxSetJointTargetVelocity(
                 clientID, blade[0], LeftBladeSpeed, sim.simx_opmode_oneshot)
             while(LeftBladeSpeed != 0):
@@ -162,7 +162,7 @@ def removeObstacle(clientID, blade, FrontDistance):
                 if (end_time - start_time > 10):
                     break
 
-            LeftBladeSpeed = -1
+            LeftBladeSpeed = -0.2
             sim.simxSetJointTargetVelocity(
                 clientID, blade[0], LeftBladeSpeed, sim.simx_opmode_oneshot)
             while(LeftBladeSpeed != 0):
@@ -172,7 +172,7 @@ def removeObstacle(clientID, blade, FrontDistance):
                     sim.simxSetJointTargetVelocity(
                         clientID, blade[0], LeftBladeSpeed, sim.simx_opmode_oneshot)
         else:
-            RightBladeSpeed = -2
+            RightBladeSpeed = -2.0
             sim.simxSetJointTargetVelocity(
                 clientID, blade[1], RightBladeSpeed, sim.simx_opmode_oneshot)
             while(RightBladeSpeed != 0):
@@ -185,7 +185,7 @@ def removeObstacle(clientID, blade, FrontDistance):
                 if (end_time - start_time > 10):
                     break
 
-            RightBladeSpeed = 1
+            RightBladeSpeed = 0.2
             sim.simxSetJointTargetVelocity(
                 clientID, blade[1], RightBladeSpeed, sim.simx_opmode_oneshot)
             while(RightBladeSpeed != 0):
