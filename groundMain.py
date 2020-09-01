@@ -413,9 +413,9 @@ if __name__ == "__main__":
         res, resolution, image = sim.simxGetVisionSensorImage(
             clientID, camera, 0, sim.simx_opmode_streaming)
 
+        retractArm(clientID, link)
         path = drone_queue.get()  # If path list is empty, wait to get a response
         print("Path received...")
-        retractArm(clientID, link)
 
         # Start main control loop
         print('Starting ground control loop...')

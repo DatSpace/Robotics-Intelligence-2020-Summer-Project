@@ -30,8 +30,6 @@ def proccessToMap(original_image, teddy_location, red_car_location):
     white_mask = cv2.inRange(hsv, (0, 0, 253), (0, 0, 255))
     concrete_mask = cv2.inRange(hsv, (0, 0, 200), (2, 0, 202))
 
-    #concrete_mask = cv2.fastNlMeansDenoising(concrete_mask, None, 40)
-
     no_tree_mask = white_mask | concrete_mask
 
     if (teddy_location != None):
@@ -60,24 +58,12 @@ def changePointScale(point, in_min, in_max, out_min, out_max):
     return [newX, newY]
 
 
-def calculateMoments(image, mask):
-    filtered = cv2.bitwise_and(image, image, mask=mask)
-
-    gray_image = cv2.cvtColor(filtered, cv2.COLOR_BGR2GRAY)
-
-    # convert the grayscale image to binary image
-    thresh = cv2.threshold(gray_image, 0, 255, cv2.THRESH_BINARY)[1]
-
-    # calculate moments of binary image
-    return cv2.moments(thresh)
-
-
 def getTeddyPixelCentre(original):
     hsv = cv2.cvtColor(original, cv2.COLOR_BGR2HSV)
 
     teddy_mask = cv2.inRange(hsv, np.array(
         [45, 254, 0]), np.array([64, 255, 255]))
-    M = calculateMoments(original, teddy_mask)
+    M = cv2.moments(teddy_mask)
 
     # calculate x,y coordinate of center
     if (M["m00"] != 0):
@@ -96,7 +82,7 @@ def getCarPixelCentre(original):
     red_mask2 = cv2.inRange(hsv, np.array(
         [170, 100, 50]), np.array([180, 255, 255]))
     red_mask = red_mask1 | red_mask2
-    M = calculateMoments(original, red_mask)
+    M = cv2.moments(red_mask)
 
     # calculate x,y coordinate of center
     if (M["m00"] != 0):
