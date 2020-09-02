@@ -172,19 +172,20 @@ def getBladesDegrees(clientID, blade):
 
 
 def removeObstacle(clientID, blade, FrontDistance):
-
+    # The values measured by the proximity sensor are called
     _, isDetected, distance, _, _ = sim.simxReadProximitySensor(
         clientID, FrontDistance, sim.simx_opmode_blocking)
-
+    # If an obstacle is detected one of the blades joints is activated
     if (isDetected):
         start_time = int(time.time())
-
+        #If de value detected by the sensor is positive the left balde opens
         if (distance[0] > 0.0):
             LeftBladeSpeed = 2.0
             sim.simxSetJointTargetVelocity(
                 clientID, blade[0], LeftBladeSpeed, sim.simx_opmode_oneshot)
             while(LeftBladeSpeed != 0):
                 LeftBlade = getBladesDegrees(clientID, blade)[0]
+                #the blade closes when it reaches 130 degrees or if it is activated more than 10 s
                 if (LeftBlade >= 130):
                     LeftBladeSpeed = 0
                     sim.simxSetJointTargetVelocity(
@@ -202,6 +203,8 @@ def removeObstacle(clientID, blade, FrontDistance):
                     LeftBladeSpeed = 0
                     sim.simxSetJointTargetVelocity(
                         clientID, blade[0], LeftBladeSpeed, sim.simx_opmode_oneshot)
+        # The algorithm for the right blade is the same
+        # The value detected by the sensor must be negative
         else:
             RightBladeSpeed = -2.0
             sim.simxSetJointTargetVelocity(
@@ -226,14 +229,15 @@ def removeObstacle(clientID, blade, FrontDistance):
                     sim.simxSetJointTargetVelocity(
                         clientID, blade[1], RightBladeSpeed, sim.simx_opmode_oneshot)
 
-
+# Retract the arm when the ground robot is moving.
 def retractArm(clientID, link):
+    # Speed at joint in link 0 is called
     L0Speed = 0.2
 
     sim.simxSetJointTargetVelocity(
         clientID, link[0], L0Speed, sim.simx_opmode_oneshot)
 
-    # Set Arm to initial Position
+    # Set Arm to initial retracted position
     L0Angle = getLinksAnglesDegrees(clientID, link)[0]
     while (L0Angle < 90):
         L0Angle = getLinksAnglesDegrees(clientID, link)[0]
@@ -256,15 +260,22 @@ def showLiveMap(original_map, current_robot_position):
         pixel_pos), (255, 102, 255), markerSize=10, thickness=2)
     cv2.imshow("Real-Time Map", current_map)
 
-
+# function to rescue the Bear
 def rescueBear(clientID, camera, leftMotor, rightMotor, finger1, finger2, link, blade, FrontDistance, arm_state, robot_state):
+    # Create variables:
+    #L variables are for the links
     L0Speed = 0
     L1Speed = 0
     L2Speed = 0
+    # Motor variables are for the wheels
     leftMotorSpeed = 0
     rightMotorSpeed = 0
+    # F variables are the fingers at the gripper
     F1Speed = 0
     F2Speed = 0
+    # If the arm state is extent
+    # L0 and L2 rotate to 35 and 0 degrees
+    # In this position the camera has a complete view in front of it
     if (arm_state == ArmState.EXTENT):
         L0Angle = getLinksAnglesDegrees(clientID, link)[0]
         L2Angle = getLinksAnglesDegrees(clientID, link)[2]
@@ -276,6 +287,8 @@ def rescueBear(clientID, camera, leftMotor, rightMotor, finger1, finger2, link, 
         else:
             arm_state = ArmState.SEARCH
             print("Searching for bear...")
+    # In arm state search the car spins on its own axis looking for the green t shirt
+
     elif (arm_state == ArmState.SEARCH):
         cXHand = getBearCenter(clientID, camera)[0]
         if (cXHand != None):
@@ -283,9 +296,9 @@ def rescueBear(clientID, camera, leftMotor, rightMotor, finger1, finger2, link, 
                 clientID, leftMotor, leftMotorSpeed, sim.simx_opmode_oneshot)
             sim.simxSetJointTargetVelocity(
                 clientID, rightMotor, rightMotorSpeed, sim.simx_opmode_oneshot)
-
+            # If any obstacle is detected in front of the robot the blades push them away
             removeObstacle(clientID, blade, FrontDistance)
-
+            # It rotates adjusting just the speed in the wheels
             L2Speed = 0.2
             L0Speed = -0.2
 
@@ -298,7 +311,9 @@ def rescueBear(clientID, camera, leftMotor, rightMotor, finger1, finger2, link, 
                 clientID, link[2], L2Speed, sim.simx_opmode_oneshot)
             sim.simxSetJointTargetVelocity(
                 clientID, link[0], L0Speed, sim.simx_opmode_oneshot)
-
+            
+            # When the green t shirt is cetred to the camera
+            # the arm is deployed adjusting L2 and L0
             while (L0Speed != 0 and L2Speed != 0):
                 L0Angle, L1Angle, L2Angle = getLinksAnglesDegrees(
                     clientID, link)
@@ -315,10 +330,11 @@ def rescueBear(clientID, camera, leftMotor, rightMotor, finger1, finger2, link, 
         else:
             leftMotorSpeed = ROBOT_SPEED / 3.0
             rightMotorSpeed = -ROBOT_SPEED / 3.0
-    elif (arm_state == ArmState.GRAB):  # Deploying the arm towards MrYork
+    elif (arm_state == ArmState.GRAB):  # Grabbing Mr. York
         _, isDetected, proximity2, _, _ = sim.simxReadProximitySensor(
             clientID, distance, sim.simx_opmode_blocking)
-
+        #If an object is detected in front of the hand at a distance < 0.03
+        # the hand closes its fingers
         if (isDetected):
             if (proximity2[2] > 0.03):
                 leftMotorSpeed = (ROBOT_SPEED / 3.0) * proximity2[2]
