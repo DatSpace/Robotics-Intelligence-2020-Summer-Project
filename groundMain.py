@@ -243,8 +243,18 @@ def retractArm(clientID, link):
         clientID, link[0], L0Speed, sim.simx_opmode_oneshot)
 
 
-def changeScale(point, in_min, in_max, out_min, out_max):
-    return (point - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+def changeScale(value, in_min, in_max, out_min, out_max):
+    return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+
+
+def showLiveMap(original_map, current_robot_position):
+    current_map = np.copy(original_map)
+    pixel_pos = drone.changePointScale([current_robot_position[1], current_robot_position[0]], [
+                                       10.0, 10.0], [-10.0, -10.0], [0.0, 0.0], [drone.SCR_WIDTH, drone.SCR_HEIGHT])
+    pixel_pos = [round(x) for x in pixel_pos]
+    cv2.drawMarker(current_map, tuple(
+        pixel_pos), (255, 102, 255), markerSize=10, thickness=2)
+    cv2.imshow("Real-Time Map", current_map)
 
 
 def rescueBear(clientID, camera, leftMotor, rightMotor, finger1, finger2, link, blade, FrontDistance, arm_state, robot_state):
@@ -383,8 +393,7 @@ if __name__ == "__main__":
     # Starting drone process
     drone_process.start()
 
-    # Start Program and just in case, close all opened connections
-    print('Program started...')
+    # Just in case, close all opened connections
     sim.simxFinish(-1)
 
     # Connect to simulator running on localhost
@@ -393,10 +402,7 @@ if __name__ == "__main__":
 
     # Connect to the simulation
     if clientID != -1:
-        print('Connected to remote API server...')
-
-        # Get handles to simulation objects
-        print('Obtaining handles of simulation objects')
+        print('Ground robot connected to remote API server...')
 
         # Vision and proximity sensors in Hand
         camera = sim.simxGetObjectHandle(
@@ -447,11 +453,10 @@ if __name__ == "__main__":
         retractArm(clientID, link)
         path = drone_queue.get()  # If path list is empty, wait to get a response
         drawn_map = drone_queue.get()
-        cv2.imshow("Map", drawn_map)
         print("Path received...")
 
         # Start main control loop
-        print('Starting ground control loop...')
+        print('Starting ground robot movement...')
 
         # While connected to the simulator
         while (sim.simxGetConnectionId(clientID) != -1):
@@ -479,6 +484,7 @@ if __name__ == "__main__":
                         robot_state = RobotState.RESCUE
                         print("Reached destination...")
                         print("Searching...")
+                    showLiveMap(drawn_map, robot_position)
             elif(robot_state == RobotState.RESCUE):
                 arm_state, robot_state = rescueBear(
                     clientID, camera, leftMotor, rightMotor, finger1, finger2, link, blade, FrontDistance, arm_state, robot_state)
@@ -506,6 +512,7 @@ if __name__ == "__main__":
                             sim.simxSetJointTargetVelocity(
                                 clientID, rightMotor, 0.0, sim.simx_opmode_oneshot)
                             break
+                    showLiveMap(drawn_map, robot_position)
 
             key_pressed = cv2.waitKey(1) & 0xFF
             emergencyMovement(clientID, key_pressed, leftMotor, rightMotor)
