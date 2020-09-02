@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+# >>--------------> READ ME <--------------<<
+# This is the only file that needs to be run!
+# Simply start the simulation file provided, and execute this script!
+
 import sim
 import cv2
 import time
@@ -136,7 +140,7 @@ def getBearCenter(clientID, camera):
         cXHand = int(MHand["m10"] / MHand["m00"])
         cYHand = int(MHand["m01"] / MHand["m00"])
     else:
-        # If there are no green color a 0 will the value be
+        # If not detected
         cXHand, cYHand = None, None
 
     return cXHand, cYHand
@@ -172,20 +176,20 @@ def getBladesDegrees(clientID, blade):
 
 
 def removeObstacle(clientID, blade, FrontDistance):
-    # The values measured by the proximity sensor are called
+    # The proximity sensor data
     _, isDetected, distance, _, _ = sim.simxReadProximitySensor(
         clientID, FrontDistance, sim.simx_opmode_blocking)
     # If an obstacle is detected one of the blades joints is activated
     if (isDetected):
         start_time = int(time.time())
-        #If de value detected by the sensor is positive the left balde opens
+        # If the value detected by the sensor is positive the left balde opens
         if (distance[0] > 0.0):
             LeftBladeSpeed = 2.0
             sim.simxSetJointTargetVelocity(
                 clientID, blade[0], LeftBladeSpeed, sim.simx_opmode_oneshot)
             while(LeftBladeSpeed != 0):
                 LeftBlade = getBladesDegrees(clientID, blade)[0]
-                #the blade closes when it reaches 130 degrees or if it is activated more than 10 s
+                # The blade closes when it reaches 130 degrees or if it is activated more than 10 s
                 if (LeftBlade >= 130):
                     LeftBladeSpeed = 0
                     sim.simxSetJointTargetVelocity(
@@ -229,7 +233,9 @@ def removeObstacle(clientID, blade, FrontDistance):
                     sim.simxSetJointTargetVelocity(
                         clientID, blade[1], RightBladeSpeed, sim.simx_opmode_oneshot)
 
-# Retract the arm when the ground robot is moving.
+# Retract the arm before the ground robot starts moving.
+
+
 def retractArm(clientID, link):
     # Speed at joint in link 0 is called
     L0Speed = 0.2
@@ -260,10 +266,12 @@ def showLiveMap(original_map, current_robot_position):
         pixel_pos), (255, 102, 255), markerSize=10, thickness=2)
     cv2.imshow("Real-Time Map", current_map)
 
-# function to rescue the Bear
+# Function to rescue the Bear
+
+
 def rescueBear(clientID, camera, leftMotor, rightMotor, finger1, finger2, link, blade, FrontDistance, arm_state, robot_state):
     # Create variables:
-    #L variables are for the links
+    # L variables are for the links
     L0Speed = 0
     L1Speed = 0
     L2Speed = 0
@@ -287,7 +295,7 @@ def rescueBear(clientID, camera, leftMotor, rightMotor, finger1, finger2, link, 
         else:
             arm_state = ArmState.SEARCH
             print("Searching for bear...")
-    # In arm state search the car spins on its own axis looking for the green t shirt
+    # In arm state search the car spins on its own axis looking for the green shirt
 
     elif (arm_state == ArmState.SEARCH):
         cXHand = getBearCenter(clientID, camera)[0]
@@ -311,8 +319,8 @@ def rescueBear(clientID, camera, leftMotor, rightMotor, finger1, finger2, link, 
                 clientID, link[2], L2Speed, sim.simx_opmode_oneshot)
             sim.simxSetJointTargetVelocity(
                 clientID, link[0], L0Speed, sim.simx_opmode_oneshot)
-            
-            # When the green t shirt is cetred to the camera
+
+            # When the green shirt is cetred to the camera
             # the arm is deployed adjusting L2 and L0
             while (L0Speed != 0 and L2Speed != 0):
                 L0Angle, L1Angle, L2Angle = getLinksAnglesDegrees(
@@ -333,7 +341,7 @@ def rescueBear(clientID, camera, leftMotor, rightMotor, finger1, finger2, link, 
     elif (arm_state == ArmState.GRAB):  # Grabbing Mr. York
         _, isDetected, proximity2, _, _ = sim.simxReadProximitySensor(
             clientID, distance, sim.simx_opmode_blocking)
-        #If an object is detected in front of the hand at a distance < 0.03
+        # If an object is detected in front of the hand at a distance < 0.03
         # the hand closes its fingers
         if (isDetected):
             if (proximity2[2] > 0.03):
@@ -351,7 +359,7 @@ def rescueBear(clientID, camera, leftMotor, rightMotor, finger1, finger2, link, 
                     clientID, finger1, F1Speed, sim.simx_opmode_oneshot)
                 sim.simxSetJointTargetVelocity(
                     clientID, finger2, F2Speed, sim.simx_opmode_oneshot)
-                # Wait for 5 seconds for fingers to close, while slowly moving forward
+                # Wait for 5 seconds for fingers to close
                 time.sleep(5)
                 arm_state = ArmState.RETRACT
                 print("Bear grabbed and retracting...")
@@ -462,8 +470,8 @@ if __name__ == "__main__":
         body = sim.simxGetObjectHandle(
             clientID, 'Robot', sim.simx_opmode_blocking)[1]
 
-        # PROBABLY DONT NEED ANY OF VARIABLES
-        res, resolution, image = sim.simxGetVisionSensorImage(
+        # Initiate the camera to stream data
+        sim.simxGetVisionSensorImage(
             clientID, camera, 0, sim.simx_opmode_streaming)
 
         retractArm(clientID, link)
